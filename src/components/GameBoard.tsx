@@ -4,7 +4,7 @@ import { createTileSet, shuffleTiles, isWinningHand, sortTiles, canFormChow, can
 import { SoundManager } from '../utils/soundUtils';
 import TileComponent from './TileComponent';
 import DiscardHistory from './DiscardHistory';
-import { Users, Bot, Trophy, RotateCcw, Volume2 } from 'lucide-react';
+import { Users, Bot, Trophy, RotateCcw, Volume2, VolumeX } from 'lucide-react';
 
 interface GameBoardProps {
   gameMode: 'bot' | 'local' | 'online';
@@ -517,8 +517,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                   ? 'bg-green-500 hover:bg-green-600 text-white' 
                   : 'bg-gray-500 hover:bg-gray-600 text-white'
               }`}
+              title={soundEnabled ? 'Sound On' : 'Sound Off'}
             >
-              <Volume2 className="w-4 h-4" />
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </button>
             <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
               <span className="text-white font-medium">
@@ -624,7 +625,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                           <TileComponent
                             key={tileIndex}
                             tile={tile}
-                            className="scale-50"
+                            className="scale-[0.35]"
                           />
                         ))}
                       </div>

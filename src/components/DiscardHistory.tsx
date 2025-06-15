@@ -119,12 +119,12 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   <div key={`${discard.playerId}-${index}`} className="relative">
                     <TileComponent
                       tile={discard.tile}
-                      className="scale-75 opacity-80 hover:opacity-100 hover:scale-90 transition-all"
+                      className="scale-50 opacity-80 hover:opacity-100 hover:scale-60 transition-all"
                     />
                   </div>
                 ))}
                 {playerDiscards.length > 6 && (
-                  <div className="flex items-center justify-center w-12 h-16 bg-white/20 rounded-lg border border-white/30">
+                  <div className="flex items-center justify-center w-8 h-10 bg-white/20 rounded-lg border border-white/30">
                     <span className="text-white text-xs">
                       +{playerDiscards.length - 6}
                     </span>
