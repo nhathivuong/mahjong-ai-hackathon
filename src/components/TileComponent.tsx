@@ -16,11 +16,12 @@ const TileComponent: React.FC<TileComponentProps> = ({
   className = '',
   isDrawn = false
 }) => {
-  const getTileDisplay = (tile: Tile): { symbol: string; color: string; bg: string } => {
+  const getTileDisplay = (tile: Tile): { symbol: string; color: string; bg: string; subtext?: string } => {
     switch (tile.type) {
       case 'bamboo':
         return {
-          symbol: tile.unicode,
+          symbol: tile.value?.toString() || '',
+          subtext: '🎋',
           color: 'text-green-700',
           bg: 'bg-gradient-to-b from-green-50 to-green-100'
         };
@@ -32,7 +33,8 @@ const TileComponent: React.FC<TileComponentProps> = ({
         };
       case 'dot':
         return {
-          symbol: tile.unicode,
+          symbol: tile.value?.toString() || '',
+          subtext: tile.unicode,
           color: 'text-blue-700',
           bg: 'bg-gradient-to-b from-blue-50 to-blue-100'
         };
@@ -56,14 +58,14 @@ const TileComponent: React.FC<TileComponentProps> = ({
     }
   };
 
-  const { symbol, color, bg } = getTileDisplay(tile);
+  const { symbol, color, bg, subtext } = getTileDisplay(tile);
 
   return (
     <div
       onClick={onClick}
       className={`
         w-16 h-20 ${bg} rounded-lg border-2 border-gray-300 shadow-md
-        flex items-center justify-center cursor-pointer
+        flex flex-col items-center justify-center cursor-pointer
         transition-all duration-200 hover:scale-105 hover:shadow-lg
         ${isSelected ? 'border-amber-500 bg-amber-100 transform -translate-y-3 shadow-xl' : ''}
         ${isDrawn ? 'border-blue-400 bg-blue-50 shadow-lg' : ''}
@@ -71,9 +73,14 @@ const TileComponent: React.FC<TileComponentProps> = ({
         ${className}
       `}
     >
-      <span className={`text-3xl font-bold ${color} leading-none`}>
+      <span className={`text-2xl font-bold ${color} leading-none`}>
         {symbol}
       </span>
+      {subtext && (
+        <span className={`text-xs ${color} mt-1`}>
+          {subtext}
+        </span>
+      )}
     </div>
   );
 };

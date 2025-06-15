@@ -64,7 +64,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   {mostRecentDiscard.playerName}
                 </p>
                 <p className="text-emerald-200 text-xs">
-                  Turn {mostRecentDiscard.turnNumber}
+                  Latest Discard
                 </p>
               </div>
             </div>
@@ -121,9 +121,6 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                       tile={discard.tile}
                       className="scale-75 opacity-80 hover:opacity-100 hover:scale-90 transition-all"
                     />
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-800 text-white text-xs rounded-full flex items-center justify-center">
-                      {discard.turnNumber}
-                    </div>
                   </div>
                 ))}
                 {playerDiscards.length > 6 && (
@@ -137,32 +134,6 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
             </div>
           );
         })}
-      </div>
-
-      {/* Complete History (Scrollable) */}
-      <div className="mt-6">
-        <h4 className="text-white font-medium mb-3">Complete History</h4>
-        <div className="max-h-32 overflow-y-auto bg-black/20 rounded-lg p-3">
-          <div className="flex flex-wrap gap-2">
-            {discardPile.map((discard, index) => (
-              <div key={index} className="relative group">
-                <TileComponent
-                  tile={discard.tile}
-                  className="scale-75 opacity-70 hover:opacity-100 transition-opacity"
-                />
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-800 text-white text-xs rounded-full flex items-center justify-center">
-                  {discard.turnNumber}
-                </div>
-                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10">
-                  {discard.playerName} - Turn {discard.turnNumber}
-                </div>
-              </div>
-            ))}
-          </div>
-          {discardPile.length === 0 && (
-            <p className="text-emerald-200 text-sm text-center py-4">No tiles discarded yet</p>
-          )}
-        </div>
       </div>
     </div>
   );

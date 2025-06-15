@@ -104,35 +104,34 @@ export const sortTiles = (tiles: Tile[]): Tile[] => {
 };
 
 export const getBambooUnicode = (value: number): string => {
-  const bambooUnicodes = ['🁐', '🁑', '🁒', '🁓', '🁔', '🁕', '🁖', '🁗', '🁘'];
-  return bambooUnicodes[value - 1];
+  const bambooUnicodes = ['🎋', '🎍', '🎋', '🎍', '🎋', '🎍', '🎋', '🎍', '🎋'];
+  return `${value}`;
 };
 
 export const getCharacterUnicode = (value: number): string => {
-  const characterUnicodes = ['🀀', '🀁', '🀂', '🀃', '🀄', '🀅', '🀆', '🀇', '🀈'];
+  const characterUnicodes = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
   return characterUnicodes[value - 1];
 };
 
 export const getDotUnicode = (value: number): string => {
-  const dotUnicodes = ['🀙', '🀚', '🀛', '🀜', '🀝', '🀞', '🀟', '🀠', '🀡'];
-  return dotUnicodes[value - 1];
+  return '●'.repeat(Math.min(value, 9));
 };
 
 export const getDragonUnicode = (dragon: DragonType): string => {
   const dragonUnicodes = {
-    red: '🀄',
-    green: '🀅',
-    white: '🀆'
+    red: '中',
+    green: '發',
+    white: '白'
   };
   return dragonUnicodes[dragon];
 };
 
 export const getWindUnicode = (wind: WindType): string => {
   const windUnicodes = {
-    east: '🀀',
-    south: '🀁',
-    west: '🀂',
-    north: '🀃'
+    east: '東',
+    south: '南',
+    west: '西',
+    north: '北'
   };
   return windUnicodes[wind];
 };
@@ -157,6 +156,57 @@ export const canFormSet = (tiles: Tile[]): boolean => {
   }
 
   return false;
+};
+
+export const canFormChow = (hand: Tile[], discardedTile: Tile): Tile[][] => {
+  if (discardedTile.type !== 'bamboo' && discardedTile.type !== 'character' && discardedTile.type !== 'dot') {
+    return [];
+  }
+
+  const possibleChows: Tile[][] = [];
+  const value = discardedTile.value!;
+  const type = discardedTile.type;
+
+  // Find tiles of the same type in hand
+  const sameSuitTiles = hand.filter(tile => tile.type === type && tile.value);
+
+  // Check for sequences where discarded tile can complete them
+  for (let i = 0; i < sameSuitTiles.length; i++) {
+    for (let j = i + 1; j < sameSuitTiles.length; j++) {
+      const tile1 = sameSuitTiles[i];
+      const tile2 = sameSuitTiles[j];
+      const values = [tile1.value!, tile2.value!, value].sort((a, b) => a - b);
+      
+      // Check if they form a sequence
+      if (values[1] === values[0] + 1 && values[2] === values[1] + 1) {
+        possibleChows.push([tile1, tile2]);
+      }
+    }
+  }
+
+  return possibleChows;
+};
+
+export const canFormPung = (hand: Tile[], discardedTile: Tile): Tile[] | null => {
+  const matchingTiles = hand.filter(tile => 
+    tile.type === discardedTile.type &&
+    tile.value === discardedTile.value &&
+    tile.dragon === discardedTile.dragon &&
+    tile.wind === discardedTile.wind
+  );
+
+  return matchingTiles.length >= 2 ? matchingTiles.slice(0, 2) : null;
+};
+
+export const canFormKong = (hand: Tile[], discardedTile: Tile): Tile[] | null => {
+  const matchingTiles = hand.filter(tile => 
+    tile.type === discardedTile.type &&
+    tile.value === discardedTile.value &&
+    tile.dragon === discardedTile.dragon &&
+    tile.wind === discardedTile.wind
+  );
+
+  return matchingTiles.length >= 3 ? matchingTiles.slice(0, 3) : null;
 };
 
 export const isWinningHand = (hand: Tile[]): boolean => {
