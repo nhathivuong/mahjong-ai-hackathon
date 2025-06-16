@@ -4,7 +4,7 @@ import { createTileSet, shuffleTiles, isWinningHand, sortTiles, canFormChow, can
 import { SoundManager } from '../utils/soundUtils';
 import TileComponent from './TileComponent';
 import DiscardHistory from './DiscardHistory';
-import { Users, Bot, Trophy, RotateCcw, Volume2, VolumeX } from 'lucide-react';
+import { Users, Bot, Trophy, RotateCcw, Volume2, VolumeX, Settings, AlertCircle } from 'lucide-react';
 
 interface GameBoardProps {
   gameMode: 'bot' | 'local' | 'online';
@@ -17,6 +17,19 @@ interface ClaimOption {
   discardedTile: Tile;
 }
 
+interface GameRestrictions {
+  maxDrawsPerTurn: number;
+  maxDiscardsPerTurn: number;
+  actionCooldownMs: number;
+}
+
+interface PlayerActionLog {
+  playerId: string;
+  action: string;
+  timestamp: number;
+  tileId?: string;
+}
+
 const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null);
@@ -24,7 +37,22 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [isProcessingTurn, setIsProcessingTurn] = useState(false);
   const [claimOptions, setClaimOptions] = useState<ClaimOption[]>([]);
   const [showClaimDialog, setShowClaimDialog] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [showAudioSettings, setShowAudioSettings] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [showError, setShowError] = useState(false);
+  
+  // Game restrictions
+  const [gameRestrictions] = useState<GameRestrictions>({
+    maxDrawsPerTurn: 1,
+    maxDiscardsPerTurn: 1,
+    actionCooldownMs: 500
+  });
+  
+  // Action tracking
+  const [turnDrawCount, setTurnDrawCount] = useState(0);
+  const [turnDiscardCount, setTurnDiscardCount] = useState(0);
+  const [lastActionTime, setLastActionTime] = useState(0);
+  const [actionLog, setActionLog] = useState<PlayerActionLog[]>([]);
   
   const soundManager = SoundManager.getInstance();
 
@@ -32,13 +60,84 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     initializeGame();
   }, []);
 
-  const playSound = (type: 'draw' | 'discard' | 'claim' | 'win') => {
-    if (!soundEnabled) return;
+  const logAction = (playerId: string, action: string, tileId?: string) => {
+    const logEntry: PlayerActionLog = {
+      playerId,
+      action,
+      timestamp: Date.now(),
+      tileId
+    };
     
+    setActionLog(prev => [...prev.slice(-50), logEntry]); // Keep last 50 actions
+    
+    // Check for suspicious behavior (rapid actions)
+    const recentActions = actionLog.filter(log => 
+      log.playerId === playerId && 
+      Date.now() - log.timestamp < 5000 // Last 5 seconds
+    );
+    
+    if (recentActions.length > 10) {
+      console.warn(`Suspicious rapid actions detected for player ${playerId}`);
+      showErrorMessage('Too many rapid actions detected. Please slow down.');
+    }
+  };
+
+  const showErrorMessage = (message: string) => {
+    setErrorMessage(message);
+    setShowError(true);
+    soundManager.playErrorSound();
+    
+    setTimeout(() => {
+      setShowError(false);
+      setErrorMessage('');
+    }, 3000);
+  };
+
+  const validateAction = (action: 'draw' | 'discard'): boolean => {
+    const now = Date.now();
+    
+    // Check cooldown
+    if (now - lastActionTime < gameRestrictions.actionCooldownMs) {
+      showErrorMessage(`Please wait ${Math.ceil((gameRestrictions.actionCooldownMs - (now - lastActionTime)) / 1000)} seconds between actions.`);
+      return false;
+    }
+    
+    // Check turn limits
+    if (action === 'draw' && turnDrawCount >= gameRestrictions.maxDrawsPerTurn) {
+      showErrorMessage(`You can only draw ${gameRestrictions.maxDrawsPerTurn} tile per turn.`);
+      return false;
+    }
+    
+    if (action === 'discard' && turnDiscardCount >= gameRestrictions.maxDiscardsPerTurn) {
+      showErrorMessage(`You can only discard ${gameRestrictions.maxDiscardsPerTurn} tile per turn.`);
+      return false;
+    }
+    
+    return true;
+  };
+
+  const resetTurnCounters = () => {
+    setTurnDrawCount(0);
+    setTurnDiscardCount(0);
+  };
+
+  const playSound = (type: 'draw' | 'discard' | 'claim' | 'win' | 'error', position?: 'center' | 'left' | 'right' | 'top' | 'bottom') => {
     if (type === 'win') {
       soundManager.playWinSound();
+    } else if (type === 'error') {
+      soundManager.playErrorSound();
     } else {
-      soundManager.playTileSound(type);
+      soundManager.playTileSound(type, position);
+    }
+  };
+
+  const getPlayerPosition = (playerIndex: number): 'center' | 'left' | 'right' | 'top' | 'bottom' => {
+    switch (playerIndex) {
+      case 0: return 'bottom';
+      case 1: return 'right';
+      case 2: return 'top';
+      case 3: return 'left';
+      default: return 'center';
     }
   };
 
@@ -103,6 +202,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setIsProcessingTurn(false);
     setClaimOptions([]);
     setShowClaimDialog(false);
+    resetTurnCounters();
+    setActionLog([]);
+    
+    soundManager.playTransitionSound('game-start');
   };
 
   const checkClaimOptions = useCallback((discardedTile: Tile, playerHand: Tile[]): ClaimOption[] => {
@@ -147,8 +250,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const drawTile = useCallback((playerIndex: number) => {
     if (!gameState || gameState.wall.length === 0 || gameState.gamePhase === 'finished' || isProcessingTurn) return;
 
-    // Only allow drawing if it's the player's turn and they haven't drawn yet
-    if (playerIndex === 0 && (gameState.currentPlayer !== 0 || drawnTile)) return;
+    // Validate action for human player
+    if (playerIndex === 0) {
+      if (gameState.currentPlayer !== 0 || drawnTile) {
+        showErrorMessage("It's not your turn to draw or you already have a drawn tile.");
+        return;
+      }
+      
+      if (!validateAction('draw')) return;
+    }
 
     const newWall = [...gameState.wall];
     const drawnTileFromWall = newWall.pop()!;
@@ -158,11 +268,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     if (playerIndex === 0) {
       // For human player, set the drawn tile separately
       setDrawnTile(drawnTileFromWall);
-      playSound('draw');
+      setTurnDrawCount(prev => prev + 1);
+      setLastActionTime(Date.now());
+      logAction('player1', 'draw', drawnTileFromWall.id);
+      playSound('draw', 'bottom');
     } else {
       // For bots, add directly to hand
       newPlayers[playerIndex].hand.push(drawnTileFromWall);
-      playSound('draw');
+      logAction(newPlayers[playerIndex].id, 'draw', drawnTileFromWall.id);
+      playSound('draw', getPlayerPosition(playerIndex));
     }
 
     setGameState(prev => prev ? {
@@ -181,13 +295,20 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       playSound('win');
       setIsProcessingTurn(false);
     }
-  }, [gameState, isProcessingTurn, drawnTile, playSound]);
+  }, [gameState, isProcessingTurn, drawnTile, validateAction, logAction, playSound]);
 
   const discardTile = useCallback((playerIndex: number, tileIndex: number, isFromDrawn = false) => {
     if (!gameState || gameState.gamePhase === 'finished' || isProcessingTurn) return;
 
-    // Only allow discarding if it's the player's turn and they have drawn a tile (or are discarding the drawn tile)
-    if (playerIndex === 0 && (gameState.currentPlayer !== 0 || (!drawnTile && !isFromDrawn))) return;
+    // Validate action for human player
+    if (playerIndex === 0) {
+      if (gameState.currentPlayer !== 0 || (!drawnTile && !isFromDrawn)) {
+        showErrorMessage("You must draw a tile before discarding.");
+        return;
+      }
+      
+      if (!validateAction('discard')) return;
+    }
 
     setIsProcessingTurn(true);
 
@@ -198,17 +319,22 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       // Discarding the drawn tile
       discardedTile = drawnTile;
       setDrawnTile(null);
+      setTurnDiscardCount(prev => prev + 1);
+      setLastActionTime(Date.now());
     } else {
       // Discarding from hand
       discardedTile = newPlayers[playerIndex].hand.splice(tileIndex, 1)[0];
       
-      // Sort player's hand after discarding if it's the human player
       if (playerIndex === 0) {
+        setTurnDiscardCount(prev => prev + 1);
+        setLastActionTime(Date.now());
+        // Sort player's hand after discarding
         newPlayers[playerIndex].hand = sortTiles(newPlayers[playerIndex].hand);
       }
     }
     
-    playSound('discard');
+    logAction(newPlayers[playerIndex].id, 'discard', discardedTile.id);
+    playSound('discard', getPlayerPosition(playerIndex));
     
     const discardedTileWithInfo: DiscardedTile = {
       tile: discardedTile,
@@ -231,6 +357,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setGameState(newGameState);
     setSelectedTileIndex(null);
 
+    // Reset turn counters when turn changes
+    if (nextPlayer === 0) {
+      resetTurnCounters();
+    }
+
+    // Play turn change sound
+    soundManager.playTransitionSound('turn-change');
+
     // Check if human player can claim the discarded tile (only if it's not their own discard)
     if (playerIndex !== 0) {
       const humanPlayerHand = newPlayers[0].hand;
@@ -248,7 +382,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setTimeout(() => {
       continueToNextTurn(newGameState);
     }, 800);
-  }, [gameState, drawnTile, isProcessingTurn, checkClaimOptions, playSound]);
+  }, [gameState, drawnTile, isProcessingTurn, checkClaimOptions, validateAction, logAction, playSound]);
 
   const continueToNextTurn = useCallback((currentGameState: GameState) => {
     setIsProcessingTurn(false);
@@ -295,7 +429,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
     setShowClaimDialog(false);
     setClaimOptions([]);
-    playSound('claim');
+    resetTurnCounters(); // Reset counters for new turn
+    logAction('player1', `claim-${option.type}`, lastDiscard.tile.id);
+    playSound('claim', 'center');
 
     // Check for winning condition
     const totalTiles = humanPlayer.hand.length + (humanPlayer.exposedSets.length * 3);
@@ -307,7 +443,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       } : null);
       playSound('win');
     }
-  }, [gameState, showClaimDialog, playSound]);
+  }, [gameState, showClaimDialog, logAction, playSound]);
 
   const handleSkipClaim = useCallback(() => {
     setShowClaimDialog(false);
@@ -339,7 +475,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         };
 
         setGameState(updatedGameState);
-        playSound('draw');
+        logAction(newPlayers[botIndex].id, 'draw', drawnTileFromWall.id);
+        playSound('draw', getPlayerPosition(botIndex));
 
         // Check for winning condition
         if (isWinningHand(newPlayers[botIndex].hand)) {
@@ -359,7 +496,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             const randomIndex = Math.floor(Math.random() * newPlayers[botIndex].hand.length);
             const discardedTile = newPlayers[botIndex].hand.splice(randomIndex, 1)[0];
             
-            playSound('discard');
+            logAction(newPlayers[botIndex].id, 'discard', discardedTile.id);
+            playSound('discard', getPlayerPosition(botIndex));
             
             const discardedTileWithInfo: DiscardedTile = {
               tile: discardedTile,
@@ -380,6 +518,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             };
 
             setGameState(finalGameState);
+            
+            // Play turn change sound
+            soundManager.playTransitionSound('turn-change');
             
             // Check if human player can claim this discard
             if (nextPlayer === 0) {
@@ -412,10 +553,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         setIsProcessingTurn(false);
       }
     }, 500);
-  }, [isProcessingTurn, checkClaimOptions, playSound]);
+  }, [isProcessingTurn, checkClaimOptions, logAction, playSound]);
 
   const handlePlayerTileClick = (tileIndex: number) => {
-    if (gameState?.gamePhase === 'finished' || isProcessingTurn || gameState?.currentPlayer !== 0 || !drawnTile) return;
+    if (gameState?.gamePhase === 'finished' || isProcessingTurn || gameState?.currentPlayer !== 0 || !drawnTile) {
+      if (!drawnTile && gameState?.currentPlayer === 0) {
+        showErrorMessage("Draw a tile first before selecting tiles to discard.");
+      }
+      return;
+    }
     setSelectedTileIndex(selectedTileIndex === tileIndex ? null : tileIndex);
   };
 
@@ -425,7 +571,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   };
 
   const handlePlayerDiscard = () => {
-    if (gameState?.currentPlayer !== 0 || gameState?.gamePhase !== 'playing' || isProcessingTurn || !drawnTile) return;
+    if (gameState?.currentPlayer !== 0 || gameState?.gamePhase !== 'playing' || isProcessingTurn || !drawnTile) {
+      showErrorMessage("You must draw a tile before discarding.");
+      return;
+    }
     
     if (selectedTileIndex !== null) {
       discardTile(0, selectedTileIndex);
@@ -439,7 +588,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   };
 
   const handleDrawTile = () => {
-    if (gameState?.currentPlayer !== 0 || gameState?.gamePhase !== 'playing' || drawnTile || isProcessingTurn) return;
+    if (gameState?.currentPlayer !== 0 || gameState?.gamePhase !== 'playing' || drawnTile || isProcessingTurn) {
+      if (drawnTile) {
+        showErrorMessage("You already have a drawn tile. Discard it first.");
+      } else if (gameState?.currentPlayer !== 0) {
+        showErrorMessage("It's not your turn to draw.");
+      }
+      return;
+    }
     
     drawTile(0);
   };
@@ -458,6 +614,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     });
 
     setDrawnTile(null);
+    logAction('player1', 'keep-drawn', drawnTile.id);
 
     // Check for winning condition
     if (isWinningHand(newPlayers[0].hand)) {
@@ -485,6 +642,85 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-7xl mx-auto">
+        {/* Error Message */}
+        {showError && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+            <div className="bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2">
+              <AlertCircle className="w-5 h-5" />
+              <span>{errorMessage}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Audio Settings Modal */}
+        {showAudioSettings && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">Audio Settings</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Master Volume
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={soundManager.getMasterVolume()}
+                    onChange={(e) => soundManager.setMasterVolume(parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                  <span className="text-sm text-gray-500">
+                    {Math.round(soundManager.getMasterVolume() * 100)}%
+                  </span>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Sound Effects Volume
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={soundManager.getSfxVolume()}
+                    onChange={(e) => soundManager.setSfxVolume(parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                  <span className="text-sm text-gray-500">
+                    {Math.round(soundManager.getSfxVolume() * 100)}%
+                  </span>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="enableSound"
+                    checked={soundManager.getEnabled()}
+                    onChange={(e) => soundManager.setEnabled(e.target.checked)}
+                    className="rounded"
+                  />
+                  <label htmlFor="enableSound" className="text-sm font-medium text-gray-700">
+                    Enable Sound Effects
+                  </label>
+                </div>
+              </div>
+              
+              <div className="flex justify-end mt-6">
+                <button
+                  onClick={() => setShowAudioSettings(false)}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Game Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-4">
@@ -502,19 +738,34 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 {isProcessingTurn && <span className="ml-2 text-amber-300">⏳</span>}
               </span>
             </div>
+            {isPlayerTurn && (
+              <div className="bg-blue-500/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-blue-400">
+                <span className="text-blue-200 font-medium">
+                  Draws: {turnDrawCount}/{gameRestrictions.maxDrawsPerTurn} | 
+                  Discards: {turnDiscardCount}/{gameRestrictions.maxDiscardsPerTurn}
+                </span>
+              </div>
+            )}
           </div>
           
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => setSoundEnabled(!soundEnabled)}
+              onClick={() => setShowAudioSettings(true)}
+              className="p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 transition-colors"
+              title="Audio Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => soundManager.setEnabled(!soundManager.getEnabled())}
               className={`p-2 rounded-lg transition-colors ${
-                soundEnabled 
+                soundManager.getEnabled() 
                   ? 'bg-green-500 hover:bg-green-600 text-white' 
                   : 'bg-gray-500 hover:bg-gray-600 text-white'
               }`}
-              title={soundEnabled ? 'Sound On' : 'Sound Off'}
+              title={soundManager.getEnabled() ? 'Sound On' : 'Sound Off'}
             >
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              {soundManager.getEnabled() ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </button>
             <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
               <span className="text-white font-medium">
@@ -702,19 +953,19 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               {isPlayerTurn && gameState.gamePhase === 'playing' && !drawnTile && (
                 <button
                   onClick={handleDrawTile}
-                  disabled={gameState.wall.length === 0 || isProcessingTurn}
+                  disabled={gameState.wall.length === 0 || isProcessingTurn || turnDrawCount >= gameRestrictions.maxDrawsPerTurn}
                   className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
                 >
-                  Draw Tile
+                  Draw Tile ({turnDrawCount}/{gameRestrictions.maxDrawsPerTurn})
                 </button>
               )}
               {selectedTileIndex !== null && isPlayerTurn && gameState.gamePhase === 'playing' && drawnTile && (
                 <button
                   onClick={handlePlayerDiscard}
-                  disabled={isProcessingTurn}
+                  disabled={isProcessingTurn || turnDiscardCount >= gameRestrictions.maxDiscardsPerTurn}
                   className="bg-red-500 hover:bg-red-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
                 >
-                  Discard Selected
+                  Discard Selected ({turnDiscardCount}/{gameRestrictions.maxDiscardsPerTurn})
                 </button>
               )}
             </div>
