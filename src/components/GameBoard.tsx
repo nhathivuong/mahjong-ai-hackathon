@@ -14,6 +14,7 @@ interface ClaimOption {
   type: 'chow' | 'pung' | 'kong';
   tiles: Tile[];
   label: string;
+  discardedTile: Tile;
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
@@ -113,7 +114,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       options.push({
         type: 'kong',
         tiles: kongTiles,
-        label: 'Kong (4 of a kind)'
+        label: 'Kong (4 of a kind)',
+        discardedTile
       });
     }
 
@@ -123,7 +125,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       options.push({
         type: 'pung',
         tiles: pungTiles,
-        label: 'Pung (3 of a kind)'
+        label: 'Pung (3 of a kind)',
+        discardedTile
       });
     }
 
@@ -133,7 +136,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       options.push({
         type: 'chow',
         tiles: chowTiles,
-        label: `Chow (sequence ${index + 1})`
+        label: `Chow (sequence ${index + 1})`,
+        discardedTile
       });
     });
 
@@ -142,6 +146,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   const drawTile = useCallback((playerIndex: number) => {
     if (!gameState || gameState.wall.length === 0 || gameState.gamePhase === 'finished' || isProcessingTurn) return;
+
+    // Only allow drawing if it's the player's turn and they haven't drawn yet
+    if (playerIndex === 0 && (gameState.currentPlayer !== 0 || drawnTile)) return;
 
     const newWall = [...gameState.wall];
     const drawnTileFromWall = newWall.pop()!;
@@ -174,10 +181,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       playSound('win');
       setIsProcessingTurn(false);
     }
-  }, [gameState, isProcessingTurn, playSound]);
+  }, [gameState, isProcessingTurn, drawnTile, playSound]);
 
   const discardTile = useCallback((playerIndex: number, tileIndex: number, isFromDrawn = false) => {
     if (!gameState || gameState.gamePhase === 'finished' || isProcessingTurn) return;
+
+    // Only allow discarding if it's the player's turn and they have drawn a tile (or are discarding the drawn tile)
+    if (playerIndex === 0 && (gameState.currentPlayer !== 0 || (!drawnTile && !isFromDrawn))) return;
 
     setIsProcessingTurn(true);
 
@@ -229,14 +239,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       if (claimOpts.length > 0) {
         setClaimOptions(claimOpts);
         setShowClaimDialog(true);
-        
-        // Auto-hide claim dialog after 5 seconds
-        setTimeout(() => {
-          setShowClaimDialog(false);
-          setClaimOptions([]);
-          continueToNextTurn(newGameState);
-        }, 5000);
-        
         setIsProcessingTurn(false);
         return;
       }
@@ -387,14 +389,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               if (claimOpts.length > 0) {
                 setClaimOptions(claimOpts);
                 setShowClaimDialog(true);
-                
-                // Auto-hide claim dialog after 5 seconds
-                setTimeout(() => {
-                  setShowClaimDialog(false);
-                  setClaimOptions([]);
-                  setIsProcessingTurn(false);
-                }, 5000);
-                
+                setIsProcessingTurn(false);
                 return;
               }
             }
@@ -420,7 +415,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   }, [isProcessingTurn, checkClaimOptions, playSound]);
 
   const handlePlayerTileClick = (tileIndex: number) => {
-    if (gameState?.gamePhase === 'finished' || isProcessingTurn || gameState?.currentPlayer !== 0) return;
+    if (gameState?.gamePhase === 'finished' || isProcessingTurn || gameState?.currentPlayer !== 0 || !drawnTile) return;
     setSelectedTileIndex(selectedTileIndex === tileIndex ? null : tileIndex);
   };
 
@@ -430,7 +425,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   };
 
   const handlePlayerDiscard = () => {
-    if (gameState?.currentPlayer !== 0 || gameState?.gamePhase !== 'playing' || isProcessingTurn) return;
+    if (gameState?.currentPlayer !== 0 || gameState?.gamePhase !== 'playing' || isProcessingTurn || !drawnTile) return;
     
     if (selectedTileIndex !== null) {
       discardTile(0, selectedTileIndex);
@@ -540,26 +535,45 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         {/* Claim Dialog */}
         {showClaimDialog && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
+            <div className="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4">
               <h3 className="text-xl font-bold text-gray-800 mb-4">Claim Tile?</h3>
               <p className="text-gray-600 mb-4">
                 You can claim the discarded tile to form a set:
               </p>
-              <div className="space-y-2 mb-6">
+              <div className="space-y-4 mb-6">
                 {claimOptions.map((option, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleClaim(option)}
-                    className="w-full p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors text-left"
-                  >
-                    {option.label}
-                  </button>
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-gray-800">{option.label}</h4>
+                      <button
+                        onClick={() => handleClaim(option)}
+                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+                      >
+                        Claim
+                      </button>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-gray-600">Your tiles:</span>
+                      {option.tiles.map((tile, tileIndex) => (
+                        <TileComponent
+                          key={tileIndex}
+                          tile={tile}
+                          className="scale-75"
+                        />
+                      ))}
+                      <span className="text-sm text-gray-600">+ Discarded:</span>
+                      <TileComponent
+                        tile={option.discardedTile}
+                        className="scale-75 border-2 border-amber-400"
+                      />
+                    </div>
+                  </div>
                 ))}
               </div>
-              <div className="flex space-x-2">
+              <div className="flex justify-end">
                 <button
                   onClick={handleSkipClaim}
-                  className="flex-1 p-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                  className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
                 >
                   Skip
                 </button>
@@ -694,7 +708,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                   Draw Tile
                 </button>
               )}
-              {selectedTileIndex !== null && isPlayerTurn && gameState.gamePhase === 'playing' && (
+              {selectedTileIndex !== null && isPlayerTurn && gameState.gamePhase === 'playing' && drawnTile && (
                 <button
                   onClick={handlePlayerDiscard}
                   disabled={isProcessingTurn}
@@ -744,6 +758,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             )}
             {drawnTile && (
               <p className="text-blue-300 font-medium">You drew a tile! Choose to keep it or discard it.</p>
+            )}
+            {!drawnTile && isPlayerTurn && gameState.gamePhase === 'playing' && (
+              <p className="text-amber-300 font-medium">Draw a tile to continue your turn.</p>
             )}
             {isProcessingTurn && (
               <p className="text-amber-300 font-medium">Processing turn...</p>
