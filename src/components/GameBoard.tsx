@@ -17,10 +17,11 @@ interface ClaimOption {
   discardedTile: Tile;
 }
 
-interface GameRestrictions {
-  maxDrawsPerTurn: number;
-  maxDiscardsPerTurn: number;
-  actionCooldownMs: number;
+interface TurnActions {
+  hasDrawn: boolean;
+  hasDiscarded: boolean;
+  canDraw: boolean;
+  canDiscard: boolean;
 }
 
 interface PlayerActionLog {
@@ -41,16 +42,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showError, setShowError] = useState(false);
   
-  // Game restrictions
-  const [gameRestrictions] = useState<GameRestrictions>({
-    maxDrawsPerTurn: 1,
-    maxDiscardsPerTurn: 1,
-    actionCooldownMs: 500
+  // Turn action tracking
+  const [turnActions, setTurnActions] = useState<TurnActions>({
+    hasDrawn: false,
+    hasDiscarded: false,
+    canDraw: true,
+    canDiscard: false
   });
   
-  // Action tracking
-  const [turnDrawCount, setTurnDrawCount] = useState(0);
-  const [turnDiscardCount, setTurnDiscardCount] = useState(0);
+  // Action tracking for anti-cheat
   const [lastActionTime, setLastActionTime] = useState(0);
   const [actionLog, setActionLog] = useState<PlayerActionLog[]>([]);
   
@@ -73,10 +73,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     // Check for suspicious behavior (rapid actions)
     const recentActions = actionLog.filter(log => 
       log.playerId === playerId && 
-      Date.now() - log.timestamp < 5000 // Last 5 seconds
+      Date.now() - log.timestamp < 2000 // Last 2 seconds
     );
     
-    if (recentActions.length > 10) {
+    if (recentActions.length > 5) {
       console.warn(`Suspicious rapid actions detected for player ${playerId}`);
       showErrorMessage('Too many rapid actions detected. Please slow down.');
     }
@@ -96,29 +96,67 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const validateAction = (action: 'draw' | 'discard'): boolean => {
     const now = Date.now();
     
-    // Check cooldown
-    if (now - lastActionTime < gameRestrictions.actionCooldownMs) {
-      showErrorMessage(`Please wait ${Math.ceil((gameRestrictions.actionCooldownMs - (now - lastActionTime)) / 1000)} seconds between actions.`);
+    // Check cooldown (300ms between actions)
+    if (now - lastActionTime < 300) {
+      showErrorMessage('Please wait a moment between actions.');
       return false;
     }
     
-    // Check turn limits
-    if (action === 'draw' && turnDrawCount >= gameRestrictions.maxDrawsPerTurn) {
-      showErrorMessage(`You can only draw ${gameRestrictions.maxDrawsPerTurn} tile per turn.`);
+    // Check turn-specific validations
+    if (action === 'draw' && !turnActions.canDraw) {
+      if (turnActions.hasDrawn) {
+        showErrorMessage('You have already drawn a tile this turn.');
+      } else {
+        showErrorMessage('You cannot draw a tile right now.');
+      }
       return false;
     }
     
-    if (action === 'discard' && turnDiscardCount >= gameRestrictions.maxDiscardsPerTurn) {
-      showErrorMessage(`You can only discard ${gameRestrictions.maxDiscardsPerTurn} tile per turn.`);
+    if (action === 'discard' && !turnActions.canDiscard) {
+      if (turnActions.hasDiscarded) {
+        showErrorMessage('You have already discarded a tile this turn.');
+      } else if (!turnActions.hasDrawn && !drawnTile) {
+        showErrorMessage('You must draw a tile or have tiles in hand before discarding.');
+      } else {
+        showErrorMessage('You cannot discard a tile right now.');
+      }
       return false;
     }
     
     return true;
   };
 
-  const resetTurnCounters = () => {
-    setTurnDrawCount(0);
-    setTurnDiscardCount(0);
+  const resetTurnActions = () => {
+    setTurnActions({
+      hasDrawn: false,
+      hasDiscarded: false,
+      canDraw: true,
+      canDiscard: false
+    });
+  };
+
+  const updateTurnActions = (action: 'draw' | 'discard' | 'claim') => {
+    setTurnActions(prev => {
+      const newState = { ...prev };
+      
+      if (action === 'draw') {
+        newState.hasDrawn = true;
+        newState.canDraw = false;
+        newState.canDiscard = true; // Can now discard after drawing
+      } else if (action === 'discard') {
+        newState.hasDiscarded = true;
+        newState.canDiscard = false;
+        // Turn ends after discard, so both actions become unavailable
+        newState.canDraw = false;
+      } else if (action === 'claim') {
+        // After claiming, player can discard but not draw
+        newState.hasDrawn = true; // Claiming counts as drawing
+        newState.canDraw = false;
+        newState.canDiscard = true;
+      }
+      
+      return newState;
+    });
   };
 
   const playSound = (type: 'draw' | 'discard' | 'claim' | 'win' | 'error', position?: 'center' | 'left' | 'right' | 'top' | 'bottom') => {
@@ -202,7 +240,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setIsProcessingTurn(false);
     setClaimOptions([]);
     setShowClaimDialog(false);
-    resetTurnCounters();
+    
+    // Initialize turn actions for dealer (can discard immediately since they have 14 tiles)
+    setTurnActions({
+      hasDrawn: false,
+      hasDiscarded: false,
+      canDraw: true,
+      canDiscard: true // Dealer can discard immediately
+    });
+    
     setActionLog([]);
     
     soundManager.playTransitionSound('game-start');
@@ -252,8 +298,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
     // Validate action for human player
     if (playerIndex === 0) {
-      if (gameState.currentPlayer !== 0 || drawnTile) {
-        showErrorMessage("It's not your turn to draw or you already have a drawn tile.");
+      if (gameState.currentPlayer !== 0) {
+        showErrorMessage("It's not your turn to draw.");
         return;
       }
       
@@ -268,7 +314,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     if (playerIndex === 0) {
       // For human player, set the drawn tile separately
       setDrawnTile(drawnTileFromWall);
-      setTurnDrawCount(prev => prev + 1);
+      updateTurnActions('draw');
       setLastActionTime(Date.now());
       logAction('player1', 'draw', drawnTileFromWall.id);
       playSound('draw', 'bottom');
@@ -295,15 +341,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       playSound('win');
       setIsProcessingTurn(false);
     }
-  }, [gameState, isProcessingTurn, drawnTile, validateAction, logAction, playSound]);
+  }, [gameState, isProcessingTurn, validateAction, logAction, playSound]);
 
   const discardTile = useCallback((playerIndex: number, tileIndex: number, isFromDrawn = false) => {
     if (!gameState || gameState.gamePhase === 'finished' || isProcessingTurn) return;
 
     // Validate action for human player
     if (playerIndex === 0) {
-      if (gameState.currentPlayer !== 0 || (!drawnTile && !isFromDrawn)) {
-        showErrorMessage("You must draw a tile before discarding.");
+      if (gameState.currentPlayer !== 0) {
+        showErrorMessage("It's not your turn to discard.");
         return;
       }
       
@@ -319,14 +365,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       // Discarding the drawn tile
       discardedTile = drawnTile;
       setDrawnTile(null);
-      setTurnDiscardCount(prev => prev + 1);
+      updateTurnActions('discard');
       setLastActionTime(Date.now());
     } else {
       // Discarding from hand
       discardedTile = newPlayers[playerIndex].hand.splice(tileIndex, 1)[0];
       
       if (playerIndex === 0) {
-        setTurnDiscardCount(prev => prev + 1);
+        updateTurnActions('discard');
         setLastActionTime(Date.now());
         // Sort player's hand after discarding
         newPlayers[playerIndex].hand = sortTiles(newPlayers[playerIndex].hand);
@@ -357,9 +403,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setGameState(newGameState);
     setSelectedTileIndex(null);
 
-    // Reset turn counters when turn changes
+    // Reset turn actions for the next player
     if (nextPlayer === 0) {
-      resetTurnCounters();
+      resetTurnActions();
     }
 
     // Play turn change sound
@@ -429,7 +475,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
     setShowClaimDialog(false);
     setClaimOptions([]);
-    resetTurnCounters(); // Reset counters for new turn
+    
+    // Update turn actions after claiming
+    updateTurnActions('claim');
+    
     logAction('player1', `claim-${option.type}`, lastDiscard.tile.id);
     playSound('claim', 'center');
 
@@ -524,6 +573,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             
             // Check if human player can claim this discard
             if (nextPlayer === 0) {
+              resetTurnActions(); // Reset for human player's turn
+              
               const humanPlayerHand = newPlayers[0].hand;
               const claimOpts = checkClaimOptions(discardedTile, humanPlayerHand);
               
@@ -556,12 +607,20 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   }, [isProcessingTurn, checkClaimOptions, logAction, playSound]);
 
   const handlePlayerTileClick = (tileIndex: number) => {
-    if (gameState?.gamePhase === 'finished' || isProcessingTurn || gameState?.currentPlayer !== 0 || !drawnTile) {
-      if (!drawnTile && gameState?.currentPlayer === 0) {
-        showErrorMessage("Draw a tile first before selecting tiles to discard.");
+    if (gameState?.gamePhase === 'finished' || isProcessingTurn || gameState?.currentPlayer !== 0) {
+      return;
+    }
+    
+    // Can only select tiles if we can discard
+    if (!turnActions.canDiscard) {
+      if (!turnActions.hasDrawn && !drawnTile) {
+        showErrorMessage("Draw a tile first or wait for your turn to begin.");
+      } else {
+        showErrorMessage("You cannot discard right now.");
       }
       return;
     }
+    
     setSelectedTileIndex(selectedTileIndex === tileIndex ? null : tileIndex);
   };
 
@@ -571,8 +630,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   };
 
   const handlePlayerDiscard = () => {
-    if (gameState?.currentPlayer !== 0 || gameState?.gamePhase !== 'playing' || isProcessingTurn || !drawnTile) {
-      showErrorMessage("You must draw a tile before discarding.");
+    if (gameState?.currentPlayer !== 0 || gameState?.gamePhase !== 'playing' || isProcessingTurn) {
+      return;
+    }
+    
+    if (!turnActions.canDiscard) {
+      showErrorMessage("You cannot discard right now.");
       return;
     }
     
@@ -584,15 +647,27 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const handleDiscardDrawnTile = () => {
     if (gameState?.currentPlayer !== 0 || gameState?.gamePhase !== 'playing' || !drawnTile || isProcessingTurn) return;
     
+    if (!turnActions.canDiscard) {
+      showErrorMessage("You cannot discard right now.");
+      return;
+    }
+    
     discardTile(0, -1, true);
   };
 
   const handleDrawTile = () => {
-    if (gameState?.currentPlayer !== 0 || gameState?.gamePhase !== 'playing' || drawnTile || isProcessingTurn) {
-      if (drawnTile) {
-        showErrorMessage("You already have a drawn tile. Discard it first.");
-      } else if (gameState?.currentPlayer !== 0) {
+    if (gameState?.currentPlayer !== 0 || gameState?.gamePhase !== 'playing' || isProcessingTurn) {
+      if (gameState?.currentPlayer !== 0) {
         showErrorMessage("It's not your turn to draw.");
+      }
+      return;
+    }
+    
+    if (!turnActions.canDraw) {
+      if (turnActions.hasDrawn) {
+        showErrorMessage("You have already drawn a tile this turn.");
+      } else {
+        showErrorMessage("You cannot draw a tile right now.");
       }
       return;
     }
@@ -741,8 +816,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             {isPlayerTurn && (
               <div className="bg-blue-500/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-blue-400">
                 <span className="text-blue-200 font-medium">
-                  Draws: {turnDrawCount}/{gameRestrictions.maxDrawsPerTurn} | 
-                  Discards: {turnDiscardCount}/{gameRestrictions.maxDiscardsPerTurn}
+                  Draw: {turnActions.hasDrawn ? '✓' : turnActions.canDraw ? '○' : '✗'} | 
+                  Discard: {turnActions.hasDiscarded ? '✓' : turnActions.canDiscard ? '○' : '✗'}
                 </span>
               </div>
             )}
@@ -930,7 +1005,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 </button>
                 <button
                   onClick={handleDiscardDrawnTile}
-                  disabled={isProcessingTurn || !isPlayerTurn}
+                  disabled={isProcessingTurn || !isPlayerTurn || !turnActions.canDiscard}
                   className="bg-red-500 hover:bg-red-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
                 >
                   Discard Tile
@@ -950,22 +1025,22 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               )}
             </h3>
             <div className="flex space-x-2">
-              {isPlayerTurn && gameState.gamePhase === 'playing' && !drawnTile && (
+              {isPlayerTurn && gameState.gamePhase === 'playing' && turnActions.canDraw && (
                 <button
                   onClick={handleDrawTile}
-                  disabled={gameState.wall.length === 0 || isProcessingTurn || turnDrawCount >= gameRestrictions.maxDrawsPerTurn}
+                  disabled={gameState.wall.length === 0 || isProcessingTurn}
                   className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
                 >
-                  Draw Tile ({turnDrawCount}/{gameRestrictions.maxDrawsPerTurn})
+                  Draw Tile
                 </button>
               )}
-              {selectedTileIndex !== null && isPlayerTurn && gameState.gamePhase === 'playing' && drawnTile && (
+              {selectedTileIndex !== null && isPlayerTurn && gameState.gamePhase === 'playing' && turnActions.canDiscard && (
                 <button
                   onClick={handlePlayerDiscard}
-                  disabled={isProcessingTurn || turnDiscardCount >= gameRestrictions.maxDiscardsPerTurn}
+                  disabled={isProcessingTurn}
                   className="bg-red-500 hover:bg-red-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
                 >
-                  Discard Selected ({turnDiscardCount}/{gameRestrictions.maxDiscardsPerTurn})
+                  Discard Selected
                 </button>
               )}
             </div>
@@ -1010,8 +1085,18 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             {drawnTile && (
               <p className="text-blue-300 font-medium">You drew a tile! Choose to keep it or discard it.</p>
             )}
-            {!drawnTile && isPlayerTurn && gameState.gamePhase === 'playing' && (
-              <p className="text-amber-300 font-medium">Draw a tile to continue your turn.</p>
+            {isPlayerTurn && gameState.gamePhase === 'playing' && (
+              <div className="mt-2">
+                {turnActions.canDraw && !drawnTile && (
+                  <p className="text-amber-300 font-medium">You can draw a tile.</p>
+                )}
+                {turnActions.canDiscard && (
+                  <p className="text-green-300 font-medium">You can discard a tile.</p>
+                )}
+                {!turnActions.canDraw && !turnActions.canDiscard && (
+                  <p className="text-gray-300 font-medium">Turn complete - waiting for next turn.</p>
+                )}
+              </div>
             )}
             {isProcessingTurn && (
               <p className="text-amber-300 font-medium">Processing turn...</p>
