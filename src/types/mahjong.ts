@@ -37,4 +37,5 @@ export interface GameState {
   gamePhase: 'setup' | 'playing' | 'finished';
   winner?: string;
   turnNumber: number;
+  drawReason?: 'riichi-declared' | 'wall-exhausted-winner' | 'wall-exhausted-draw';
 }

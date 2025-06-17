@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Player, GameState, Tile, DiscardedTile } from '../types/mahjong';
-import { createTileSet, shuffleTiles, isWinningHand, sortTiles, canFormChow, canFormPung, canFormKong } from '../utils/tileUtils';
+import { createTileSet, shuffleTiles, isWinningHand, sortTiles, canFormChow, canFormPung, canFormKong, calculateHandValue } from '../utils/tileUtils';
 import { SoundManager } from '../utils/soundUtils';
 import TileComponent from './TileComponent';
 import DiscardHistory from './DiscardHistory';
-import { Users, Bot, Trophy, RotateCcw, Volume2, VolumeX, Settings, AlertCircle } from 'lucide-react';
+import { Users, Bot, Trophy, RotateCcw, Volume2, VolumeX, Settings, AlertCircle, Clock } from 'lucide-react';
 
 interface GameBoardProps {
   gameMode: 'bot' | 'local' | 'online';
@@ -31,6 +31,15 @@ interface PlayerActionLog {
   tileId?: string;
 }
 
+interface HandEvaluation {
+  playerId: string;
+  playerName: string;
+  handValue: number;
+  handDescription: string;
+  tiles: Tile[];
+  exposedSets: Tile[][];
+}
+
 const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null);
@@ -41,6 +50,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [showAudioSettings, setShowAudioSettings] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showError, setShowError] = useState(false);
+  const [showWallExhaustionDialog, setShowWallExhaustionDialog] = useState(false);
+  const [handEvaluations, setHandEvaluations] = useState<HandEvaluation[]>([]);
   
   // Turn action tracking
   const [turnActions, setTurnActions] = useState<TurnActions>({
@@ -179,6 +190,80 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   };
 
+  const evaluateAllHands = (players: Player[]): HandEvaluation[] => {
+    return players.map(player => {
+      const allTiles = [...player.hand, ...player.exposedSets.flat()];
+      const handValue = calculateHandValue(player.hand, player.exposedSets);
+      
+      return {
+        playerId: player.id,
+        playerName: player.name,
+        handValue,
+        handDescription: getHandDescription(player.hand, player.exposedSets),
+        tiles: player.hand,
+        exposedSets: player.exposedSets
+      };
+    });
+  };
+
+  const getHandDescription = (hand: Tile[], exposedSets: Tile[][]): string => {
+    const totalTiles = hand.length + exposedSets.flat().length;
+    const setsCount = exposedSets.length;
+    
+    if (setsCount === 0) {
+      return `Concealed hand (${totalTiles} tiles)`;
+    } else {
+      return `${setsCount} exposed set${setsCount > 1 ? 's' : ''} + ${hand.length} concealed tiles`;
+    }
+  };
+
+  const handleWallExhaustion = (currentGameState: GameState) => {
+    // Check if any player declared riichi (not implemented in current version, so skip this check)
+    const hasRiichi = false; // Placeholder for riichi detection
+    
+    if (hasRiichi) {
+      // Game is a draw if riichi was declared
+      setGameState(prev => prev ? {
+        ...prev,
+        gamePhase: 'finished',
+        winner: undefined,
+        drawReason: 'riichi-declared'
+      } : null);
+      soundManager.playTransitionSound('round-end');
+      return;
+    }
+
+    // Evaluate all hands
+    const evaluations = evaluateAllHands(currentGameState.players);
+    setHandEvaluations(evaluations);
+    
+    // Find the highest hand value
+    const maxValue = Math.max(...evaluations.map(e => e.handValue));
+    const winners = evaluations.filter(e => e.handValue === maxValue);
+    
+    if (winners.length === 1) {
+      // Single winner
+      setGameState(prev => prev ? {
+        ...prev,
+        gamePhase: 'finished',
+        winner: winners[0].playerId,
+        drawReason: 'wall-exhausted-winner'
+      } : null);
+      soundManager.playWinSound();
+    } else {
+      // Multiple winners or all equal - draw
+      setGameState(prev => prev ? {
+        ...prev,
+        gamePhase: 'finished',
+        winner: undefined,
+        drawReason: 'wall-exhausted-draw'
+      } : null);
+      soundManager.playTransitionSound('round-end');
+    }
+    
+    setShowWallExhaustionDialog(true);
+  };
+
   const initializeGame = () => {
     const tiles = shuffleTiles(createTileSet());
     
@@ -240,6 +325,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setIsProcessingTurn(false);
     setClaimOptions([]);
     setShowClaimDialog(false);
+    setShowWallExhaustionDialog(false);
+    setHandEvaluations([]);
     
     // Initialize turn actions for dealer (can discard immediately since they have 14 tiles)
     setTurnActions({
@@ -294,7 +381,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   }, []);
 
   const drawTile = useCallback((playerIndex: number) => {
-    if (!gameState || gameState.wall.length === 0 || gameState.gamePhase === 'finished' || isProcessingTurn) return;
+    if (!gameState || gameState.gamePhase === 'finished' || isProcessingTurn) return;
+
+    // Check for wall exhaustion
+    if (gameState.wall.length === 0) {
+      handleWallExhaustion(gameState);
+      return;
+    }
 
     // Validate action for human player
     if (playerIndex === 0) {
@@ -325,11 +418,19 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       playSound('draw', getPlayerPosition(playerIndex));
     }
 
-    setGameState(prev => prev ? {
-      ...prev,
+    const updatedGameState = {
+      ...gameState,
       players: newPlayers,
       wall: newWall
-    } : null);
+    };
+
+    setGameState(updatedGameState);
+
+    // Check for wall exhaustion after draw
+    if (newWall.length === 0) {
+      setTimeout(() => handleWallExhaustion(updatedGameState), 1000);
+      return;
+    }
 
     // Check for winning condition for bots
     if (playerIndex !== 0 && isWinningHand([...newPlayers[playerIndex].hand])) {
@@ -527,6 +628,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         logAction(newPlayers[botIndex].id, 'draw', drawnTileFromWall.id);
         playSound('draw', getPlayerPosition(botIndex));
 
+        // Check for wall exhaustion after bot draw
+        if (newWall.length === 0) {
+          setTimeout(() => handleWallExhaustion(updatedGameState), 1000);
+          setIsProcessingTurn(false);
+          return;
+        }
+
         // Check for winning condition
         if (isWinningHand(newPlayers[botIndex].hand)) {
           setGameState(prev => prev ? {
@@ -601,6 +709,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           }
         }, 1000);
       } else {
+        // Wall exhausted during bot's turn to draw
+        handleWallExhaustion(currentGameState);
         setIsProcessingTurn(false);
       }
     }, 500);
@@ -702,6 +812,19 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   };
 
+  const getDrawReason = (reason?: string): string => {
+    switch (reason) {
+      case 'riichi-declared':
+        return 'Game ended in a draw due to riichi declaration';
+      case 'wall-exhausted-winner':
+        return 'Wall exhausted - Winner determined by hand value';
+      case 'wall-exhausted-draw':
+        return 'Wall exhausted - All players have equal hand values';
+      default:
+        return 'Game ended in a draw';
+    }
+  };
+
   if (!gameState) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -742,6 +865,100 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             <div className="bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2">
               <AlertCircle className="w-5 h-5" />
               <span>{errorMessage}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Wall Exhaustion Dialog */}
+        {showWallExhaustionDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-8 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="text-center mb-6">
+                <Clock className="w-16 h-16 text-amber-500 mx-auto mb-4" />
+                <h2 className="text-3xl font-bold text-gray-800 mb-2">Wall Exhausted</h2>
+                <p className="text-gray-600 text-lg">
+                  {getDrawReason(gameState.drawReason)}
+                </p>
+              </div>
+
+              {handEvaluations.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-xl font-bold text-gray-800 mb-4">Final Hand Evaluations</h3>
+                  <div className="space-y-4">
+                    {handEvaluations
+                      .sort((a, b) => b.handValue - a.handValue)
+                      .map((evaluation, index) => (
+                      <div
+                        key={evaluation.playerId}
+                        className={`border rounded-lg p-4 ${
+                          index === 0 && gameState.winner === evaluation.playerId
+                            ? 'border-amber-400 bg-amber-50'
+                            : 'border-gray-200 bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-3">
+                            <span className="text-lg font-bold text-gray-800">
+                              {evaluation.playerName}
+                            </span>
+                            {index === 0 && gameState.winner === evaluation.playerId && (
+                              <Trophy className="w-5 h-5 text-amber-500" />
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-gray-800">
+                              {evaluation.handValue} points
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              {evaluation.handDescription}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Show tiles */}
+                        <div className="flex flex-wrap gap-1">
+                          {evaluation.tiles.map((tile, tileIndex) => (
+                            <TileComponent
+                              key={tileIndex}
+                              tile={tile}
+                              className="scale-50"
+                            />
+                          ))}
+                          {evaluation.exposedSets.map((set, setIndex) => (
+                            <div key={setIndex} className="flex gap-0.5 ml-2 bg-emerald-100 rounded p-1">
+                              {set.map((tile, tileIndex) => (
+                                <TileComponent
+                                  key={tileIndex}
+                                  tile={tile}
+                                  className="scale-50 border border-emerald-400/50"
+                                />
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-center space-x-4">
+                <button
+                  onClick={() => setShowWallExhaustionDialog(false)}
+                  className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                >
+                  Continue
+                </button>
+                <button
+                  onClick={() => {
+                    setShowWallExhaustionDialog(false);
+                    initializeGame();
+                  }}
+                  className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+                >
+                  New Game
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -864,6 +1081,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
               <span className="text-white font-medium">
                 Wall: {gameState.wall.length} tiles
+                {gameState.wall.length <= 10 && (
+                  <span className="ml-2 text-amber-300">⚠️</span>
+                )}
               </span>
             </div>
             <button
@@ -928,13 +1148,19 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         )}
 
         {/* Game Winner */}
-        {gameState.gamePhase === 'finished' && (
+        {gameState.gamePhase === 'finished' && !showWallExhaustionDialog && (
           <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-6 mb-6 text-center">
             <Trophy className="w-12 h-12 text-white mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-white mb-2">Game Over!</h2>
-            <p className="text-white text-lg">
-              {gameState.players.find(p => p.id === gameState.winner)?.name} wins with Mahjong!
-            </p>
+            {gameState.winner ? (
+              <p className="text-white text-lg">
+                {gameState.players.find(p => p.id === gameState.winner)?.name} wins with Mahjong!
+              </p>
+            ) : (
+              <p className="text-white text-lg">
+                {getDrawReason(gameState.drawReason)}
+              </p>
+            )}
             <button
               onClick={initializeGame}
               className="mt-4 bg-white/20 hover:bg-white/30 text-white px-6 py-2 rounded-lg transition-colors"

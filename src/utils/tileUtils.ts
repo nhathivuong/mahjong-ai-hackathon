@@ -248,3 +248,55 @@ const checkWinningPattern = (counts: number[]): boolean => {
   
   return false;
 };
+
+// Calculate hand value for wall exhaustion scoring
+export const calculateHandValue = (hand: Tile[], exposedSets: Tile[][]): number => {
+  let score = 0;
+  const allTiles = [...hand, ...exposedSets.flat()];
+  
+  // Base score for tile count
+  score += allTiles.length;
+  
+  // Bonus for exposed sets (melds)
+  score += exposedSets.length * 5;
+  
+  // Bonus for honor tiles (dragons and winds)
+  const honorTiles = allTiles.filter(tile => tile.type === 'dragon' || tile.type === 'wind');
+  score += honorTiles.length * 2;
+  
+  // Bonus for pairs
+  const tileMap = new Map<string, number>();
+  allTiles.forEach(tile => {
+    const key = `${tile.type}-${tile.value || tile.dragon || tile.wind}`;
+    tileMap.set(key, (tileMap.get(key) || 0) + 1);
+  });
+  
+  const pairs = Array.from(tileMap.values()).filter(count => count >= 2);
+  score += pairs.length * 3;
+  
+  // Bonus for triplets
+  const triplets = Array.from(tileMap.values()).filter(count => count >= 3);
+  score += triplets.length * 8;
+  
+  // Bonus for sequences (simplified detection)
+  const suitTiles = {
+    bamboo: allTiles.filter(t => t.type === 'bamboo').map(t => t.value!).sort((a, b) => a - b),
+    character: allTiles.filter(t => t.type === 'character').map(t => t.value!).sort((a, b) => a - b),
+    dot: allTiles.filter(t => t.type === 'dot').map(t => t.value!).sort((a, b) => a - b)
+  };
+  
+  Object.values(suitTiles).forEach(values => {
+    for (let i = 0; i < values.length - 2; i++) {
+      if (values[i + 1] === values[i] + 1 && values[i + 2] === values[i] + 2) {
+        score += 6; // Sequence bonus
+      }
+    }
+  });
+  
+  // Bonus for concealed hand (no exposed sets)
+  if (exposedSets.length === 0) {
+    score += 10;
+  }
+  
+  return score;
+};
