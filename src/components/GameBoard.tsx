@@ -714,6 +714,25 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const playerHand = gameState.players[0].hand;
   const isPlayerTurn = gameState.currentPlayer === 0;
 
+  // Filter out claimed tiles from discard pile for display
+  const getActiveDiscards = () => {
+    const claimedTileIds = new Set();
+    
+    // Collect all claimed tile IDs from all players' exposed sets
+    gameState.players.forEach(player => {
+      player.exposedSets.forEach(set => {
+        set.forEach(tile => {
+          claimedTileIds.add(tile.id);
+        });
+      });
+    });
+    
+    // Return only discards that haven't been claimed
+    return gameState.discardPile.filter(discard => !claimedTileIds.has(discard.tile.id));
+  };
+
+  const activeDiscards = getActiveDiscards();
+
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-7xl mx-auto">
@@ -956,16 +975,16 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               </div>
               {/* Exposed Sets */}
               {player.exposedSets.length > 0 && (
-                <div className="mt-2">
-                  <div className="text-emerald-200 text-xs mb-1">Exposed Sets:</div>
-                  <div className="flex flex-wrap gap-1">
+                <div className="mt-3">
+                  <div className="text-emerald-200 text-xs mb-2">Exposed Sets:</div>
+                  <div className="flex flex-wrap gap-2">
                     {player.exposedSets.map((set, setIndex) => (
-                      <div key={setIndex} className="flex gap-0.5">
+                      <div key={setIndex} className="flex gap-0.5 bg-white/5 rounded-lg p-1">
                         {set.map((tile, tileIndex) => (
                           <TileComponent
                             key={tileIndex}
                             tile={tile}
-                            className="scale-[0.35]"
+                            className="scale-[0.3] border border-emerald-400/50"
                           />
                         ))}
                       </div>
@@ -977,10 +996,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           ))}
         </div>
 
-        {/* Discard History */}
+        {/* Optimized Discard History */}
         <div className="mb-6">
           <DiscardHistory 
-            discardPile={gameState.discardPile} 
+            discardPile={activeDiscards} 
             players={gameState.players.map(p => ({ id: p.id, name: p.name }))}
           />
         </div>
@@ -1060,15 +1079,18 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           {/* Player's Exposed Sets */}
           {gameState.players[0].exposedSets.length > 0 && (
             <div className="mb-4">
-              <h4 className="text-white font-medium mb-2">Your Exposed Sets:</h4>
+              <h4 className="text-white font-medium mb-3">Your Exposed Sets:</h4>
               <div className="flex flex-wrap gap-4">
                 {gameState.players[0].exposedSets.map((set, setIndex) => (
-                  <div key={setIndex} className="flex gap-1 bg-white/5 rounded-lg p-2">
+                  <div key={setIndex} className="flex gap-1 bg-emerald-500/10 rounded-lg p-3 border border-emerald-400/30">
+                    <div className="text-emerald-200 text-xs mr-2 self-center">
+                      Set {setIndex + 1}:
+                    </div>
                     {set.map((tile, tileIndex) => (
                       <TileComponent
                         key={tileIndex}
                         tile={tile}
-                        className="scale-75"
+                        className="scale-75 border border-emerald-400/50"
                       />
                     ))}
                   </div>

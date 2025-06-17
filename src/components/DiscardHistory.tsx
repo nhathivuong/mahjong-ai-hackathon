@@ -44,27 +44,27 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
 
   return (
     <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
-      <h3 className="text-white font-medium text-lg mb-4">Discard History</h3>
+      <h3 className="text-white font-medium text-lg mb-4">Active Discards</h3>
       
-      {/* Central Layout */}
-      <div className="relative w-full h-96 bg-emerald-800/30 rounded-xl border border-emerald-600/30">
+      {/* Optimized Central Layout */}
+      <div className="relative w-full h-80 bg-emerald-800/30 rounded-xl border border-emerald-600/30 overflow-hidden">
         
         {/* Center - Most Recent Discard */}
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
           {mostRecentDiscard ? (
             <div className="text-center">
               <div className="mb-2">
                 <TileComponent
                   tile={mostRecentDiscard.tile}
-                  className="scale-125 shadow-lg"
+                  className="scale-110 shadow-xl border-2 border-amber-400"
                 />
               </div>
-              <div className="bg-black/50 rounded-lg px-3 py-1">
+              <div className="bg-black/70 rounded-lg px-3 py-1">
                 <p className="text-white text-sm font-medium">
                   {mostRecentDiscard.playerName}
                 </p>
                 <p className="text-emerald-200 text-xs">
-                  Latest Discard
+                  Latest
                 </p>
               </div>
             </div>
@@ -78,55 +78,66 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
 
-        {/* Player Discard Areas */}
+        {/* Optimized Player Discard Areas */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
-          const recentDiscards = playerDiscards.slice(-6); // Show last 6 discards
+          const recentDiscards = playerDiscards.slice(-8); // Show last 8 discards for better visibility
           
           let positionClasses = '';
           let flexDirection = '';
+          let tileScale = 'scale-[0.4]'; // Smaller tiles for compact layout
           
           switch (position) {
             case 'bottom':
-              positionClasses = 'absolute bottom-4 left-1/2 transform -translate-x-1/2';
+              positionClasses = 'absolute bottom-2 left-1/2 transform -translate-x-1/2';
               flexDirection = 'flex-row';
               break;
             case 'top':
-              positionClasses = 'absolute top-4 left-1/2 transform -translate-x-1/2';
+              positionClasses = 'absolute top-2 left-1/2 transform -translate-x-1/2';
               flexDirection = 'flex-row';
               break;
             case 'left':
-              positionClasses = 'absolute left-4 top-1/2 transform -translate-y-1/2';
+              positionClasses = 'absolute left-2 top-1/2 transform -translate-y-1/2';
               flexDirection = 'flex-col';
               break;
             case 'right':
-              positionClasses = 'absolute right-4 top-1/2 transform -translate-y-1/2';
+              positionClasses = 'absolute right-2 top-1/2 transform -translate-y-1/2';
               flexDirection = 'flex-col';
               break;
           }
 
           return (
             <div key={player.id} className={positionClasses}>
-              <div className="text-center mb-2">
-                <div className={`inline-block px-3 py-1 rounded-lg text-xs font-medium ${getPlayerColor(player.id)}`}>
+              <div className="text-center mb-1">
+                <div className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${getPlayerColor(player.id)}`}>
                   {player.name}
                   <span className="ml-1 text-gray-600">({playerDiscards.length})</span>
                 </div>
               </div>
-              <div className={`flex ${flexDirection} gap-1`}>
+              
+              {/* Compact tile display with better spacing */}
+              <div className={`flex ${flexDirection} gap-0.5 max-w-xs max-h-64 overflow-hidden`}>
                 {recentDiscards.map((discard, index) => (
                   <div key={`${discard.playerId}-${index}`} className="relative">
                     <TileComponent
                       tile={discard.tile}
-                      className="scale-50 opacity-80 hover:opacity-100 hover:scale-60 transition-all"
+                      className={`${tileScale} opacity-75 hover:opacity-100 hover:scale-[0.45] transition-all duration-200 border border-white/20`}
                     />
+                    {/* Turn number indicator for recent discards */}
+                    {index === recentDiscards.length - 1 && playerDiscards.length > 1 && (
+                      <div className="absolute -top-1 -right-1 bg-amber-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                        !
+                      </div>
+                    )}
                   </div>
                 ))}
-                {playerDiscards.length > 6 && (
-                  <div className="flex items-center justify-center w-8 h-10 bg-white/20 rounded-lg border border-white/30">
-                    <span className="text-white text-xs">
-                      +{playerDiscards.length - 6}
+                
+                {/* Overflow indicator */}
+                {playerDiscards.length > 8 && (
+                  <div className="flex items-center justify-center w-6 h-8 bg-white/20 rounded-md border border-white/30">
+                    <span className="text-white text-xs font-bold">
+                      +{playerDiscards.length - 8}
                     </span>
                   </div>
                 )}
@@ -134,6 +145,19 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
             </div>
           );
         })}
+      </div>
+
+      {/* Compact Summary Bar */}
+      <div className="mt-4 flex justify-between items-center text-sm">
+        <div className="text-emerald-200">
+          Total Active Discards: <span className="font-medium text-white">{discardPile.length}</span>
+        </div>
+        {mostRecentDiscard && (
+          <div className="text-emerald-200">
+            Last: <span className="font-medium text-white">{mostRecentDiscard.playerName}</span>
+            <span className="ml-2 text-xs text-gray-300">Turn {mostRecentDiscard.turnNumber}</span>
+          </div>
+        )}
       </div>
     </div>
   );
