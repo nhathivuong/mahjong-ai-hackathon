@@ -119,18 +119,13 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
               {/* Ultra-compact tile display with minimal spacing - tiles almost touching */}
               <div className={`flex ${flexDirection} gap-0.5 max-w-xs max-h-64 overflow-hidden`}>
                 {recentDiscards.map((discard, index) => (
-                  <div key={`${discard.playerId}-${index}`} className="relative">
-                    <TileComponent
-                      tile={discard.tile}
-                      className={`${tileScale} opacity-75 hover:opacity-100 hover:scale-[0.35] transition-all duration-200 border border-white/20 shadow-sm`}
-                    />
-                    {/* Turn number indicator for recent discards */}
-                    {index === recentDiscards.length - 1 && playerDiscards.length > 1 && (
-                      <div className="absolute -top-0.5 -right-0.5 bg-amber-500 text-white text-xs rounded-full w-3 h-3 flex items-center justify-center font-bold text-[10px]">
-                        !
-                      </div>
-                    )}
-                  </div>
+                  <TileComponent
+                    key={`${discard.playerId}-${index}`}
+                    tile={discard.tile}
+                    className={`${tileScale} opacity-75 hover:opacity-100 hover:scale-[0.35] transition-all duration-200 border border-white/20 shadow-sm ${
+                      index === recentDiscards.length - 1 && playerDiscards.length > 1 ? 'relative' : ''
+                    }`}
+                  />
                 ))}
                 
                 {/* Overflow indicator */}
