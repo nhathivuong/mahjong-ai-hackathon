@@ -71,7 +71,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
 
-        {/* Player Discard Areas with Better Spacing */}
+        {/* Player Discard Areas with Better Spacing and Wider Tiles */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
@@ -115,25 +115,25 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </div>
               )}
               
-              {/* Tile grid - compact layout with bigger tiles */}
+              {/* Tile grid - wider cells to accommodate better proportions */}
               <div className={`grid ${gridClasses} gap-0.5 w-fit h-fit ${isBot ? '' : 'mb-1'}`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
                     key={`${discard.playerId}-${index}`}
-                    className="w-8 h-10 flex items-center justify-center"
+                    className="w-12 h-14 flex items-center justify-center"
                   >
                     <TileComponent
                       tile={discard.tile}
-                      className="scale-[0.6] opacity-80 hover:opacity-100 hover:scale-[0.65] transition-all duration-200 border border-white/20 shadow-sm"
+                      className="scale-[0.7] opacity-80 hover:opacity-100 hover:scale-[0.75] transition-all duration-200 border border-white/20 shadow-sm"
                     />
                   </div>
                 ))}
                 
-                {/* Fill empty grid cells if needed */}
+                {/* Fill empty grid cells if needed - wider cells */}
                 {Array.from({ length: Math.max(0, 8 - recentDiscards.length) }, (_, index) => (
                   <div 
                     key={`empty-${index}`}
-                    className="w-8 h-10 bg-white/5 border border-white/10 rounded-sm opacity-20"
+                    className="w-12 h-14 bg-white/5 border border-white/10 rounded-sm opacity-20"
                   />
                 ))}
               </div>
