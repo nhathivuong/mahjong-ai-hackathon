@@ -98,7 +98,7 @@ const TileComponent: React.FC<TileComponentProps> = ({
       onClick={onClick}
       className={`
         w-16 h-20 ${bg} rounded-lg border-2 border-gray-300 shadow-md
-        flex flex-col items-center justify-center cursor-pointer relative
+        flex flex-col items-center justify-center cursor-pointer relative overflow-hidden
         transition-all duration-200 hover:scale-105 hover:shadow-lg
         ${isSelected ? 'border-amber-500 bg-amber-100 transform -translate-y-3 shadow-xl' : ''}
         ${isDrawn ? 'border-blue-400 bg-blue-50 shadow-lg' : ''}
@@ -106,21 +106,21 @@ const TileComponent: React.FC<TileComponentProps> = ({
         ${className}
       `}
     >
-      {/* Main symbol */}
-      <span className={`text-xl font-bold ${color} leading-none`}>
+      {/* Main symbol - adjusted sizing for better fit */}
+      <span className={`text-lg font-bold ${color} leading-none flex-shrink-0`}>
         {symbol}
       </span>
       
-      {/* Subtext (bamboo icon or dot pattern) - removed mt-1 margin */}
+      {/* Subtext (bamboo icon or dot pattern) - better contained */}
       {subtext && (
-        <div className={`text-xs ${color} text-center leading-tight whitespace-pre-line`}>
+        <div className={`text-[10px] ${color} text-center leading-none whitespace-pre-line flex-shrink-0 max-w-full overflow-hidden`}>
           {subtext}
         </div>
       )}
       
-      {/* Label (Chinese number, English direction, or dragon color) */}
+      {/* Label (Chinese number, English direction, or dragon color) - better positioned */}
       {label && (
-        <div className="absolute -bottom-1 -right-1 bg-white/90 text-gray-700 text-xs px-1 rounded border border-gray-300 font-medium">
+        <div className="absolute bottom-0 right-0 bg-white/90 text-gray-700 text-[8px] px-1 py-0.5 rounded-tl border-l border-t border-gray-300 font-medium leading-none">
           {label}
         </div>
       )}
