@@ -46,11 +46,11 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
     <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
       <h3 className="text-white font-medium text-lg mb-4">Active Discards</h3>
       
-      {/* Increased height from h-80 to h-96 for more space */}
-      <div className="relative w-full h-96 bg-emerald-800/30 rounded-xl border border-emerald-600/30 overflow-hidden">
+      {/* Increased height to h-[28rem] for even more space */}
+      <div className="relative w-full h-[28rem] bg-emerald-800/30 rounded-xl border border-emerald-600/30 overflow-hidden">
         
-        {/* Center - Most Recent Discard */}
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+        {/* Center - Most Recent Discard - moved up slightly to avoid bottom overlap */}
+        <div className="absolute top-[45%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
           {mostRecentDiscard && (
             <div className="text-center">
               <div className="mb-2">
@@ -83,23 +83,23 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           
           switch (position) {
             case 'bottom':
-              // Moved further from center to prevent overlap
-              positionClasses = 'absolute bottom-4 left-1/2 transform -translate-x-1/2';
+              // Moved much further down to prevent overlap with center
+              positionClasses = 'absolute bottom-2 left-1/2 transform -translate-x-1/2';
               gridClasses = 'grid-cols-4 grid-rows-2';
               break;
             case 'top':
-              // Moved further from center to prevent overlap
-              positionClasses = 'absolute top-4 left-1/2 transform -translate-x-1/2';
+              // Moved further up to prevent overlap
+              positionClasses = 'absolute top-2 left-1/2 transform -translate-x-1/2';
               gridClasses = 'grid-cols-4 grid-rows-2';
               break;
             case 'left':
-              // Moved further from center to prevent overlap
-              positionClasses = 'absolute left-4 top-1/2 transform -translate-y-1/2';
+              // Moved further left to prevent overlap
+              positionClasses = 'absolute left-2 top-1/2 transform -translate-y-1/2';
               gridClasses = 'grid-cols-2 grid-rows-4';
               break;
             case 'right':
-              // Moved further from center to prevent overlap
-              positionClasses = 'absolute right-4 top-1/2 transform -translate-y-1/2';
+              // Moved further right to prevent overlap
+              positionClasses = 'absolute right-2 top-1/2 transform -translate-y-1/2';
               gridClasses = 'grid-cols-2 grid-rows-4';
               break;
           }
@@ -108,23 +108,23 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
             <div key={player.id} className={positionClasses}>
               {/* Bot labels on top, Player label below */}
               {isBot && (
-                <div className="text-center mb-2">
-                  <div className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${getPlayerColor(player.id)}`}>
+                <div className="text-center mb-1">
+                  <div className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium ${getPlayerColor(player.id)}`}>
                     {player.name}
                   </div>
                 </div>
               )}
               
-              {/* Tile grid - removed rotation, all tiles face upright */}
-              <div className={`grid ${gridClasses} gap-1 w-fit h-fit ${isBot ? '' : 'mb-2'}`}>
+              {/* Tile grid - compact layout */}
+              <div className={`grid ${gridClasses} gap-0.5 w-fit h-fit ${isBot ? '' : 'mb-1'}`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
                     key={`${discard.playerId}-${index}`}
-                    className="w-10 h-12 flex items-center justify-center"
+                    className="w-8 h-10 flex items-center justify-center"
                   >
                     <TileComponent
                       tile={discard.tile}
-                      className="w-full h-full scale-[0.5] opacity-80 hover:opacity-100 hover:scale-[0.6] transition-all duration-200 border border-white/20 shadow-sm"
+                      className="w-full h-full scale-[0.4] opacity-80 hover:opacity-100 hover:scale-[0.45] transition-all duration-200 border border-white/20 shadow-sm"
                     />
                   </div>
                 ))}
@@ -133,7 +133,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 {Array.from({ length: Math.max(0, 8 - recentDiscards.length) }, (_, index) => (
                   <div 
                     key={`empty-${index}`}
-                    className="w-10 h-12 bg-white/5 border border-white/10 rounded-sm opacity-30"
+                    className="w-8 h-10 bg-white/5 border border-white/10 rounded-sm opacity-20"
                   />
                 ))}
               </div>
@@ -141,16 +141,16 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
               {/* Player label below tiles (only for human player) */}
               {!isBot && (
                 <div className="text-center">
-                  <div className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${getPlayerColor(player.id)}`}>
+                  <div className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium ${getPlayerColor(player.id)}`}>
                     {player.name} (Dealer)
                   </div>
                 </div>
               )}
               
-              {/* Overflow indicator */}
+              {/* Overflow indicator - more compact */}
               {playerDiscards.length > 8 && (
-                <div className="text-center mt-1">
-                  <div className="inline-block px-2 py-1 bg-white/20 rounded text-xs text-white font-bold">
+                <div className="text-center mt-0.5">
+                  <div className="inline-block px-1.5 py-0.5 bg-white/20 rounded text-xs text-white font-bold">
                     +{playerDiscards.length - 8}
                   </div>
                 </div>
