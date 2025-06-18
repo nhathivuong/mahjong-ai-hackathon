@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Player, GameState, Tile, DiscardedTile } from '../types/mahjong';
-import { createTileSet, shuffleTiles, isWinningHand, sortTiles, canFormChow, canFormPung, canFormKong, calculateHandValue } from '../utils/tileUtils';
+import { createTileSet, shuffleTiles, isWinningHand, sortTiles, canFormChow, canFormPung, canFormKong } from '../utils/tileUtils';
 import { SoundManager } from '../utils/soundUtils';
 import TileComponent from './TileComponent';
 import DiscardHistory from './DiscardHistory';
-import { Users, Bot, Trophy, RotateCcw, Volume2, VolumeX, Settings, AlertCircle, Clock } from 'lucide-react';
+import { Users, Bot, Trophy, RotateCcw, Volume2, VolumeX, Settings, AlertCircle } from 'lucide-react';
 
 interface GameBoardProps {
   gameMode: 'bot' | 'local' | 'online';
@@ -22,7 +22,6 @@ interface TurnActions {
   hasDiscarded: boolean;
   canDraw: boolean;
   canDiscard: boolean;
-  isFirstTurn: boolean; // Track if this is the dealer's first turn
 }
 
 interface PlayerActionLog {
@@ -30,15 +29,6 @@ interface PlayerActionLog {
   action: string;
   timestamp: number;
   tileId?: string;
-}
-
-interface HandEvaluation {
-  playerId: string;
-  playerName: string;
-  handValue: number;
-  handDescription: string;
-  tiles: Tile[];
-  exposedSets: Tile[][];
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
@@ -51,16 +41,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [showAudioSettings, setShowAudioSettings] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showError, setShowError] = useState(false);
-  const [showWallExhaustionDialog, setShowWallExhaustionDialog] = useState(false);
-  const [handEvaluations, setHandEvaluations] = useState<HandEvaluation[]>([]);
+  const [isFirstTurn, setIsFirstTurn] = useState(true);
   
   // Turn action tracking
   const [turnActions, setTurnActions] = useState<TurnActions>({
     hasDrawn: false,
     hasDiscarded: false,
-    canDraw: true,
-    canDiscard: false,
-    isFirstTurn: false
+    canDraw: false, // Dealer cannot draw on first turn
+    canDiscard: true // Dealer must discard first
   });
   
   // Action tracking for anti-cheat
@@ -116,7 +104,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
     
     // Special validation for dealer's first turn
-    if (turnActions.isFirstTurn && action === 'draw') {
+    if (isFirstTurn && action === 'draw') {
       showErrorMessage('As the dealer, you must discard first since you start with 14 tiles.');
       return false;
     }
@@ -134,7 +122,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     if (action === 'discard' && !turnActions.canDiscard) {
       if (turnActions.hasDiscarded) {
         showErrorMessage('You have already discarded a tile this turn.');
-      } else if (!turnActions.hasDrawn && !drawnTile && !turnActions.isFirstTurn) {
+      } else if (!turnActions.hasDrawn && !drawnTile && !isFirstTurn) {
         showErrorMessage('You must draw a tile or have tiles in hand before discarding.');
       } else {
         showErrorMessage('You cannot discard a tile right now.');
@@ -145,13 +133,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     return true;
   };
 
-  const resetTurnActions = (isDealer: boolean = false) => {
+  const resetTurnActions = () => {
     setTurnActions({
       hasDrawn: false,
       hasDiscarded: false,
-      canDraw: !isDealer, // Dealer cannot draw on first turn
-      canDiscard: true, // All players can discard (dealer has 14 tiles, others after drawing)
-      isFirstTurn: isDealer
+      canDraw: true,
+      canDiscard: false
     });
   };
 
@@ -163,19 +150,21 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         newState.hasDrawn = true;
         newState.canDraw = false;
         newState.canDiscard = true; // Can now discard after drawing
-        newState.isFirstTurn = false; // No longer first turn after any action
       } else if (action === 'discard') {
         newState.hasDiscarded = true;
         newState.canDiscard = false;
-        newState.isFirstTurn = false; // No longer first turn after any action
         // Turn ends after discard, so both actions become unavailable
         newState.canDraw = false;
+        
+        // Clear first turn flag after any action
+        if (isFirstTurn) {
+          setIsFirstTurn(false);
+        }
       } else if (action === 'claim') {
         // After claiming, player can discard but not draw
         newState.hasDrawn = true; // Claiming counts as drawing
         newState.canDraw = false;
         newState.canDiscard = true;
-        newState.isFirstTurn = false; // No longer first turn after any action
       }
       
       return newState;
@@ -200,80 +189,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       case 3: return 'left';
       default: return 'center';
     }
-  };
-
-  const evaluateAllHands = (players: Player[]): HandEvaluation[] => {
-    return players.map(player => {
-      const allTiles = [...player.hand, ...player.exposedSets.flat()];
-      const handValue = calculateHandValue(player.hand, player.exposedSets);
-      
-      return {
-        playerId: player.id,
-        playerName: player.name,
-        handValue,
-        handDescription: getHandDescription(player.hand, player.exposedSets),
-        tiles: player.hand,
-        exposedSets: player.exposedSets
-      };
-    });
-  };
-
-  const getHandDescription = (hand: Tile[], exposedSets: Tile[][]): string => {
-    const totalTiles = hand.length + exposedSets.flat().length;
-    const setsCount = exposedSets.length;
-    
-    if (setsCount === 0) {
-      return `Concealed hand (${totalTiles} tiles)`;
-    } else {
-      return `${setsCount} exposed set${setsCount > 1 ? 's' : ''} + ${hand.length} concealed tiles`;
-    }
-  };
-
-  const handleWallExhaustion = (currentGameState: GameState) => {
-    // Check if any player declared riichi (not implemented in current version, so skip this check)
-    const hasRiichi = false; // Placeholder for riichi detection
-    
-    if (hasRiichi) {
-      // Game is a draw if riichi was declared
-      setGameState(prev => prev ? {
-        ...prev,
-        gamePhase: 'finished',
-        winner: undefined,
-        drawReason: 'riichi-declared'
-      } : null);
-      soundManager.playTransitionSound('round-end');
-      return;
-    }
-
-    // Evaluate all hands
-    const evaluations = evaluateAllHands(currentGameState.players);
-    setHandEvaluations(evaluations);
-    
-    // Find the highest hand value
-    const maxValue = Math.max(...evaluations.map(e => e.handValue));
-    const winners = evaluations.filter(e => e.handValue === maxValue);
-    
-    if (winners.length === 1) {
-      // Single winner
-      setGameState(prev => prev ? {
-        ...prev,
-        gamePhase: 'finished',
-        winner: winners[0].playerId,
-        drawReason: 'wall-exhausted-winner'
-      } : null);
-      soundManager.playWinSound();
-    } else {
-      // Multiple winners or all equal - draw
-      setGameState(prev => prev ? {
-        ...prev,
-        gamePhase: 'finished',
-        winner: undefined,
-        drawReason: 'wall-exhausted-draw'
-      } : null);
-      soundManager.playTransitionSound('round-end');
-    }
-    
-    setShowWallExhaustionDialog(true);
   };
 
   const initializeGame = () => {
@@ -337,15 +252,44 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setIsProcessingTurn(false);
     setClaimOptions([]);
     setShowClaimDialog(false);
-    setShowWallExhaustionDialog(false);
-    setHandEvaluations([]);
+    setIsFirstTurn(true);
     
-    // Initialize turn actions for dealer (must discard first, cannot draw)
-    resetTurnActions(true); // true indicates this is the dealer's first turn
+    // Initialize turn actions for dealer (must discard first)
+    setTurnActions({
+      hasDrawn: false,
+      hasDiscarded: false,
+      canDraw: false, // Dealer cannot draw on first turn
+      canDiscard: true // Dealer must discard first
+    });
     
     setActionLog([]);
     
     soundManager.playTransitionSound('game-start');
+  };
+
+  // Helper function to remove duplicate chow sequences
+  const removeDuplicateChows = (options: ClaimOption[]): ClaimOption[] => {
+    const uniqueOptions: ClaimOption[] = [];
+    const seenSequences = new Set<string>();
+
+    options.forEach(option => {
+      if (option.type === 'chow') {
+        // Create a signature for the sequence based on sorted tile values
+        const allTiles = [...option.tiles, option.discardedTile];
+        const values = allTiles.map(tile => tile.value!).sort((a, b) => a - b);
+        const signature = `${option.discardedTile.type}-${values.join('-')}`;
+        
+        if (!seenSequences.has(signature)) {
+          seenSequences.add(signature);
+          uniqueOptions.push(option);
+        }
+      } else {
+        // For pung and kong, just add them as they don't have duplicates
+        uniqueOptions.push(option);
+      }
+    });
+
+    return uniqueOptions;
   };
 
   const checkClaimOptions = useCallback((discardedTile: Tile, playerHand: Tile[]): ClaimOption[] => {
@@ -375,26 +319,21 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
     // Check for Chow (only from previous player)
     const chowOptions = canFormChow(playerHand, discardedTile);
-    chowOptions.forEach((chowTiles, index) => {
+    chowOptions.forEach((chowTiles) => {
       options.push({
         type: 'chow',
         tiles: chowTiles,
-        label: `Chow (sequence ${index + 1})`,
+        label: 'Chow (sequence)',
         discardedTile
       });
     });
 
-    return options;
+    // Remove duplicate chow sequences
+    return removeDuplicateChows(options);
   }, []);
 
   const drawTile = useCallback((playerIndex: number) => {
-    if (!gameState || gameState.gamePhase === 'finished' || isProcessingTurn) return;
-
-    // Check for wall exhaustion
-    if (gameState.wall.length === 0) {
-      handleWallExhaustion(gameState);
-      return;
-    }
+    if (!gameState || gameState.wall.length === 0 || gameState.gamePhase === 'finished' || isProcessingTurn) return;
 
     // Validate action for human player
     if (playerIndex === 0) {
@@ -425,19 +364,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       playSound('draw', getPlayerPosition(playerIndex));
     }
 
-    const updatedGameState = {
-      ...gameState,
+    setGameState(prev => prev ? {
+      ...prev,
       players: newPlayers,
       wall: newWall
-    };
-
-    setGameState(updatedGameState);
-
-    // Check for wall exhaustion after draw
-    if (newWall.length === 0) {
-      setTimeout(() => handleWallExhaustion(updatedGameState), 1000);
-      return;
-    }
+    } : null);
 
     // Check for winning condition for bots
     if (playerIndex !== 0 && isWinningHand([...newPlayers[playerIndex].hand])) {
@@ -511,9 +442,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setGameState(newGameState);
     setSelectedTileIndex(null);
 
-    // Reset turn actions for the next player (no one is dealer after first turn)
+    // Reset turn actions for the next player
     if (nextPlayer === 0) {
-      resetTurnActions(false); // false = not dealer's first turn
+      resetTurnActions();
     }
 
     // Play turn change sound
@@ -584,7 +515,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setShowClaimDialog(false);
     setClaimOptions([]);
     
-    // Update turn actions after claiming (not first turn anymore)
+    // Update turn actions after claiming
     updateTurnActions('claim');
     
     logAction('player1', `claim-${option.type}`, lastDiscard.tile.id);
@@ -635,13 +566,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         logAction(newPlayers[botIndex].id, 'draw', drawnTileFromWall.id);
         playSound('draw', getPlayerPosition(botIndex));
 
-        // Check for wall exhaustion after bot draw
-        if (newWall.length === 0) {
-          setTimeout(() => handleWallExhaustion(updatedGameState), 1000);
-          setIsProcessingTurn(false);
-          return;
-        }
-
         // Check for winning condition
         if (isWinningHand(newPlayers[botIndex].hand)) {
           setGameState(prev => prev ? {
@@ -688,7 +612,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             
             // Check if human player can claim this discard
             if (nextPlayer === 0) {
-              resetTurnActions(false); // Reset for human player's turn (not first turn)
+              resetTurnActions(); // Reset for human player's turn
               
               const humanPlayerHand = newPlayers[0].hand;
               const claimOpts = checkClaimOptions(discardedTile, humanPlayerHand);
@@ -716,8 +640,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           }
         }, 1000);
       } else {
-        // Wall exhausted during bot's turn to draw
-        handleWallExhaustion(currentGameState);
         setIsProcessingTurn(false);
       }
     }, 500);
@@ -730,8 +652,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     
     // Can only select tiles if we can discard
     if (!turnActions.canDiscard) {
-      if (turnActions.isFirstTurn) {
-        showErrorMessage("As the dealer, you must discard first since you start with 14 tiles.");
+      if (isFirstTurn) {
+        // Special message for dealer's first turn
+        showErrorMessage("As the dealer, you must discard a tile to begin the game.");
       } else if (!turnActions.hasDrawn && !drawnTile) {
         showErrorMessage("Draw a tile first or wait for your turn to begin.");
       } else {
@@ -754,11 +677,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
     
     if (!turnActions.canDiscard) {
-      if (turnActions.isFirstTurn) {
-        showErrorMessage("As the dealer, you must discard first since you start with 14 tiles.");
-      } else {
-        showErrorMessage("You cannot discard right now.");
-      }
+      showErrorMessage("You cannot discard right now.");
       return;
     }
     
@@ -787,7 +706,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
     
     if (!turnActions.canDraw) {
-      if (turnActions.isFirstTurn) {
+      if (isFirstTurn) {
         showErrorMessage("As the dealer, you must discard first since you start with 14 tiles.");
       } else if (turnActions.hasDrawn) {
         showErrorMessage("You have already drawn a tile this turn.");
@@ -824,19 +743,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         winner: newPlayers[0].id
       } : null);
       playSound('win');
-    }
-  };
-
-  const getDrawReason = (reason?: string): string => {
-    switch (reason) {
-      case 'riichi-declared':
-        return 'Game ended in a draw due to riichi declaration';
-      case 'wall-exhausted-winner':
-        return 'Wall exhausted - Winner determined by hand value';
-      case 'wall-exhausted-draw':
-        return 'Wall exhausted - All players have equal hand values';
-      default:
-        return 'Game ended in a draw';
     }
   };
 
@@ -880,100 +786,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             <div className="bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2">
               <AlertCircle className="w-5 h-5" />
               <span>{errorMessage}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Wall Exhaustion Dialog */}
-        {showWallExhaustionDialog && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-8 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-              <div className="text-center mb-6">
-                <Clock className="w-16 h-16 text-amber-500 mx-auto mb-4" />
-                <h2 className="text-3xl font-bold text-gray-800 mb-2">Wall Exhausted</h2>
-                <p className="text-gray-600 text-lg">
-                  {getDrawReason(gameState.drawReason)}
-                </p>
-              </div>
-
-              {handEvaluations.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-xl font-bold text-gray-800 mb-4">Final Hand Evaluations</h3>
-                  <div className="space-y-4">
-                    {handEvaluations
-                      .sort((a, b) => b.handValue - a.handValue)
-                      .map((evaluation, index) => (
-                      <div
-                        key={evaluation.playerId}
-                        className={`border rounded-lg p-4 ${
-                          index === 0 && gameState.winner === evaluation.playerId
-                            ? 'border-amber-400 bg-amber-50'
-                            : 'border-gray-200 bg-gray-50'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <span className="text-lg font-bold text-gray-800">
-                              {evaluation.playerName}
-                            </span>
-                            {index === 0 && gameState.winner === evaluation.playerId && (
-                              <Trophy className="w-5 h-5 text-amber-500" />
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <div className="text-2xl font-bold text-gray-800">
-                              {evaluation.handValue} points
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              {evaluation.handDescription}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Show tiles */}
-                        <div className="flex flex-wrap gap-1">
-                          {evaluation.tiles.map((tile, tileIndex) => (
-                            <TileComponent
-                              key={tileIndex}
-                              tile={tile}
-                              className="scale-50"
-                            />
-                          ))}
-                          {evaluation.exposedSets.map((set, setIndex) => (
-                            <div key={setIndex} className="flex gap-0.5 ml-2 bg-emerald-100 rounded p-1">
-                              {set.map((tile, tileIndex) => (
-                                <TileComponent
-                                  key={tileIndex}
-                                  tile={tile}
-                                  className="scale-50 border border-emerald-400/50"
-                                />
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-center space-x-4">
-                <button
-                  onClick={() => setShowWallExhaustionDialog(false)}
-                  className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                >
-                  Continue
-                </button>
-                <button
-                  onClick={() => {
-                    setShowWallExhaustionDialog(false);
-                    initializeGame();
-                  }}
-                  className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
-                >
-                  New Game
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -1067,7 +879,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             {isPlayerTurn && (
               <div className="bg-blue-500/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-blue-400">
                 <span className="text-blue-200 font-medium">
-                  {turnActions.isFirstTurn ? 'Dealer First Turn - Must Discard' : 
+                  {isFirstTurn ? 'Dealer - Must Discard First' : 
                    `Draw: ${turnActions.hasDrawn ? '✓' : turnActions.canDraw ? '○' : '✗'} | 
                     Discard: ${turnActions.hasDiscarded ? '✓' : turnActions.canDiscard ? '○' : '✗'}`}
                 </span>
@@ -1097,9 +909,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
               <span className="text-white font-medium">
                 Wall: {gameState.wall.length} tiles
-                {gameState.wall.length <= 10 && (
-                  <span className="ml-2 text-amber-300">⚠️</span>
-                )}
               </span>
             </div>
             <button
@@ -1113,48 +922,55 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         </div>
 
-        {/* Claim Dialog */}
+        {/* Compact Claim Dialog - Positioned at top right */}
         {showClaimDialog && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">Claim Tile?</h3>
-              <p className="text-gray-600 mb-4">
-                You can claim the discarded tile to form a set:
-              </p>
-              <div className="space-y-4 mb-6">
+          <div className="fixed top-4 right-4 z-40 max-w-sm">
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-bold text-gray-800">Claim Tile?</h3>
+                <button
+                  onClick={handleSkipClaim}
+                  className="text-gray-500 hover:text-gray-700 text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="space-y-3 max-h-64 overflow-y-auto">
                 {claimOptions.map((option, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-medium text-gray-800">{option.label}</h4>
+                  <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-gray-800 text-sm">{option.label}</h4>
                       <button
                         onClick={() => handleClaim(option)}
-                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+                        className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-sm transition-colors"
                       >
                         Claim
                       </button>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm text-gray-600">Your tiles:</span>
+                    <div className="flex items-center space-x-1">
+                      <span className="text-xs text-gray-600">Your:</span>
                       {option.tiles.map((tile, tileIndex) => (
                         <TileComponent
                           key={tileIndex}
                           tile={tile}
-                          className="scale-75"
+                          className="scale-50"
                         />
                       ))}
-                      <span className="text-sm text-gray-600">+ Discarded:</span>
+                      <span className="text-xs text-gray-600">+</span>
                       <TileComponent
                         tile={option.discardedTile}
-                        className="scale-75 border-2 border-amber-400"
+                        className="scale-50 border-2 border-amber-400"
                       />
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="flex justify-end">
+              
+              <div className="flex justify-end mt-3">
                 <button
                   onClick={handleSkipClaim}
-                  className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors"
                 >
                   Skip
                 </button>
@@ -1164,19 +980,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         )}
 
         {/* Game Winner */}
-        {gameState.gamePhase === 'finished' && !showWallExhaustionDialog && (
+        {gameState.gamePhase === 'finished' && (
           <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-6 mb-6 text-center">
             <Trophy className="w-12 h-12 text-white mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-white mb-2">Game Over!</h2>
-            {gameState.winner ? (
-              <p className="text-white text-lg">
-                {gameState.players.find(p => p.id === gameState.winner)?.name} wins with Mahjong!
-              </p>
-            ) : (
-              <p className="text-white text-lg">
-                {getDrawReason(gameState.drawReason)}
-              </p>
-            )}
+            <p className="text-white text-lg">
+              {gameState.players.find(p => p.id === gameState.winner)?.name} wins with Mahjong!
+            </p>
             <button
               onClick={initializeGame}
               className="mt-4 bg-white/20 hover:bg-white/30 text-white px-6 py-2 rounded-lg transition-colors"
@@ -1282,9 +1092,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             <h3 className="text-white font-medium text-lg">
               Your Hand
               {isPlayerTurn && (
-                <span className="ml-2 text-amber-300 text-sm">
-                  ● {turnActions.isFirstTurn ? 'Your Turn (Dealer - Must Discard First)' : 'Your Turn'}
-                </span>
+                <span className="ml-2 text-amber-300 text-sm">● Your Turn</span>
               )}
             </h3>
             <div className="flex space-x-2">
@@ -1353,16 +1161,16 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             )}
             {isPlayerTurn && gameState.gamePhase === 'playing' && (
               <div className="mt-2">
-                {turnActions.isFirstTurn && (
-                  <p className="text-amber-300 font-medium">As the dealer, you start with 14 tiles and must discard first.</p>
+                {isFirstTurn && (
+                  <p className="text-amber-300 font-medium">As the dealer, you must discard first since you start with 14 tiles.</p>
                 )}
-                {turnActions.canDraw && !drawnTile && !turnActions.isFirstTurn && (
+                {!isFirstTurn && turnActions.canDraw && !drawnTile && (
                   <p className="text-amber-300 font-medium">You can draw a tile.</p>
                 )}
                 {turnActions.canDiscard && (
                   <p className="text-green-300 font-medium">You can discard a tile.</p>
                 )}
-                {!turnActions.canDraw && !turnActions.canDiscard && (
+                {!isFirstTurn && !turnActions.canDraw && !turnActions.canDiscard && (
                   <p className="text-gray-300 font-medium">Turn complete - waiting for next turn.</p>
                 )}
               </div>
