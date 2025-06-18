@@ -28,6 +28,16 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
     }
   };
 
+  const getTileRotation = (position: string): string => {
+    switch (position) {
+      case 'top': return 'rotate-180'; // Bot South - tiles face down (toward center)
+      case 'left': return 'rotate-90'; // Bot West - tiles face right (toward center)
+      case 'right': return '-rotate-90'; // Bot East - tiles face left (toward center)
+      case 'bottom': return ''; // Player - tiles face up (toward center)
+      default: return '';
+    }
+  };
+
   const groupDiscardsByPlayer = () => {
     const grouped: { [key: string]: DiscardedTile[] } = {};
     discardPile.forEach(discard => {
@@ -51,7 +61,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
         
         {/* Center - Most Recent Discard */}
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
-          {mostRecentDiscard ? (
+          {mostRecentDiscard && (
             <div className="text-center">
               <div className="mb-2">
                 <TileComponent
@@ -68,21 +78,16 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </p>
               </div>
             </div>
-          ) : (
-            <div className="text-center text-emerald-200">
-              <div className="w-16 h-20 border-2 border-dashed border-emerald-400 rounded-lg flex items-center justify-center mb-2">
-                <span className="text-2xl">?</span>
-              </div>
-              <p className="text-sm">No discards yet</p>
-            </div>
           )}
         </div>
 
-        {/* Player Discard Areas with Grid Layout */}
+        {/* Player Discard Areas with Proper Positioning */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
           const recentDiscards = playerDiscards.slice(-8);
+          const tileRotation = getTileRotation(position);
+          const isBot = player.id !== 'player1';
           
           let positionClasses = '';
           let gridClasses = '';
@@ -108,8 +113,17 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
 
           return (
             <div key={player.id} className={positionClasses}>
-              {/* Player label below the tiles */}
-              <div className={`grid ${gridClasses} gap-0 w-fit h-fit mb-1`}>
+              {/* Bot labels on top, Player label below */}
+              {isBot && (
+                <div className="text-center mb-1">
+                  <div className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${getPlayerColor(player.id)}`}>
+                    {player.name}
+                  </div>
+                </div>
+              )}
+              
+              {/* Tile grid with rotation */}
+              <div className={`grid ${gridClasses} gap-0 w-fit h-fit ${isBot ? '' : 'mb-1'}`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
                     key={`${discard.playerId}-${index}`}
@@ -117,7 +131,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   >
                     <TileComponent
                       tile={discard.tile}
-                      className="w-full h-full scale-[0.5] opacity-80 hover:opacity-100 hover:scale-[0.6] transition-all duration-200 border border-white/20 shadow-sm"
+                      className={`w-full h-full scale-[0.5] opacity-80 hover:opacity-100 hover:scale-[0.6] transition-all duration-200 border border-white/20 shadow-sm ${tileRotation}`}
                     />
                   </div>
                 ))}
@@ -131,13 +145,14 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 ))}
               </div>
               
-              {/* Player name below tiles */}
-              <div className="text-center">
-                <div className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${getPlayerColor(player.id)}`}>
-                  {player.name}
-                  {player.id === 'player1' && ' (Dealer)'}
+              {/* Player label below tiles (only for human player) */}
+              {!isBot && (
+                <div className="text-center">
+                  <div className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${getPlayerColor(player.id)}`}>
+                    {player.name} (Dealer)
+                  </div>
                 </div>
-              </div>
+              )}
               
               {/* Overflow indicator */}
               {playerDiscards.length > 8 && (
@@ -152,7 +167,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
         })}
       </div>
 
-      {/* Simplified Summary - removed total count and player count */}
+      {/* Simplified Summary */}
       {mostRecentDiscard && (
         <div className="mt-4 text-center">
           <div className="text-emerald-200 text-sm">
