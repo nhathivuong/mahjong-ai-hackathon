@@ -22,6 +22,7 @@ interface TurnActions {
   hasDiscarded: boolean;
   canDraw: boolean;
   canDiscard: boolean;
+  isFirstTurn: boolean; // Track if this is the dealer's first turn
 }
 
 interface PlayerActionLog {
@@ -58,7 +59,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     hasDrawn: false,
     hasDiscarded: false,
     canDraw: true,
-    canDiscard: false
+    canDiscard: false,
+    isFirstTurn: false
   });
   
   // Action tracking for anti-cheat
@@ -113,6 +115,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       return false;
     }
     
+    // Special validation for dealer's first turn
+    if (turnActions.isFirstTurn && action === 'draw') {
+      showErrorMessage('As the dealer, you must discard first since you start with 14 tiles.');
+      return false;
+    }
+    
     // Check turn-specific validations
     if (action === 'draw' && !turnActions.canDraw) {
       if (turnActions.hasDrawn) {
@@ -126,7 +134,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     if (action === 'discard' && !turnActions.canDiscard) {
       if (turnActions.hasDiscarded) {
         showErrorMessage('You have already discarded a tile this turn.');
-      } else if (!turnActions.hasDrawn && !drawnTile) {
+      } else if (!turnActions.hasDrawn && !drawnTile && !turnActions.isFirstTurn) {
         showErrorMessage('You must draw a tile or have tiles in hand before discarding.');
       } else {
         showErrorMessage('You cannot discard a tile right now.');
@@ -137,12 +145,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     return true;
   };
 
-  const resetTurnActions = () => {
+  const resetTurnActions = (isDealer: boolean = false) => {
     setTurnActions({
       hasDrawn: false,
       hasDiscarded: false,
-      canDraw: true,
-      canDiscard: false
+      canDraw: !isDealer, // Dealer cannot draw on first turn
+      canDiscard: true, // All players can discard (dealer has 14 tiles, others after drawing)
+      isFirstTurn: isDealer
     });
   };
 
@@ -154,9 +163,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         newState.hasDrawn = true;
         newState.canDraw = false;
         newState.canDiscard = true; // Can now discard after drawing
+        newState.isFirstTurn = false; // No longer first turn after any action
       } else if (action === 'discard') {
         newState.hasDiscarded = true;
         newState.canDiscard = false;
+        newState.isFirstTurn = false; // No longer first turn after any action
         // Turn ends after discard, so both actions become unavailable
         newState.canDraw = false;
       } else if (action === 'claim') {
@@ -164,6 +175,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         newState.hasDrawn = true; // Claiming counts as drawing
         newState.canDraw = false;
         newState.canDiscard = true;
+        newState.isFirstTurn = false; // No longer first turn after any action
       }
       
       return newState;
@@ -328,13 +340,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setShowWallExhaustionDialog(false);
     setHandEvaluations([]);
     
-    // Initialize turn actions for dealer (can discard immediately since they have 14 tiles)
-    setTurnActions({
-      hasDrawn: false,
-      hasDiscarded: false,
-      canDraw: true,
-      canDiscard: true // Dealer can discard immediately
-    });
+    // Initialize turn actions for dealer (must discard first, cannot draw)
+    resetTurnActions(true); // true indicates this is the dealer's first turn
     
     setActionLog([]);
     
@@ -504,9 +511,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setGameState(newGameState);
     setSelectedTileIndex(null);
 
-    // Reset turn actions for the next player
+    // Reset turn actions for the next player (no one is dealer after first turn)
     if (nextPlayer === 0) {
-      resetTurnActions();
+      resetTurnActions(false); // false = not dealer's first turn
     }
 
     // Play turn change sound
@@ -577,7 +584,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setShowClaimDialog(false);
     setClaimOptions([]);
     
-    // Update turn actions after claiming
+    // Update turn actions after claiming (not first turn anymore)
     updateTurnActions('claim');
     
     logAction('player1', `claim-${option.type}`, lastDiscard.tile.id);
@@ -681,7 +688,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             
             // Check if human player can claim this discard
             if (nextPlayer === 0) {
-              resetTurnActions(); // Reset for human player's turn
+              resetTurnActions(false); // Reset for human player's turn (not first turn)
               
               const humanPlayerHand = newPlayers[0].hand;
               const claimOpts = checkClaimOptions(discardedTile, humanPlayerHand);
@@ -723,7 +730,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     
     // Can only select tiles if we can discard
     if (!turnActions.canDiscard) {
-      if (!turnActions.hasDrawn && !drawnTile) {
+      if (turnActions.isFirstTurn) {
+        showErrorMessage("As the dealer, you must discard first since you start with 14 tiles.");
+      } else if (!turnActions.hasDrawn && !drawnTile) {
         showErrorMessage("Draw a tile first or wait for your turn to begin.");
       } else {
         showErrorMessage("You cannot discard right now.");
@@ -745,7 +754,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
     
     if (!turnActions.canDiscard) {
-      showErrorMessage("You cannot discard right now.");
+      if (turnActions.isFirstTurn) {
+        showErrorMessage("As the dealer, you must discard first since you start with 14 tiles.");
+      } else {
+        showErrorMessage("You cannot discard right now.");
+      }
       return;
     }
     
@@ -774,7 +787,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
     
     if (!turnActions.canDraw) {
-      if (turnActions.hasDrawn) {
+      if (turnActions.isFirstTurn) {
+        showErrorMessage("As the dealer, you must discard first since you start with 14 tiles.");
+      } else if (turnActions.hasDrawn) {
         showErrorMessage("You have already drawn a tile this turn.");
       } else {
         showErrorMessage("You cannot draw a tile right now.");
@@ -1052,8 +1067,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             {isPlayerTurn && (
               <div className="bg-blue-500/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-blue-400">
                 <span className="text-blue-200 font-medium">
-                  Draw: {turnActions.hasDrawn ? '✓' : turnActions.canDraw ? '○' : '✗'} | 
-                  Discard: {turnActions.hasDiscarded ? '✓' : turnActions.canDiscard ? '○' : '✗'}
+                  {turnActions.isFirstTurn ? 'Dealer First Turn - Must Discard' : 
+                   `Draw: ${turnActions.hasDrawn ? '✓' : turnActions.canDraw ? '○' : '✗'} | 
+                    Discard: ${turnActions.hasDiscarded ? '✓' : turnActions.canDiscard ? '○' : '✗'}`}
                 </span>
               </div>
             )}
@@ -1266,7 +1282,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             <h3 className="text-white font-medium text-lg">
               Your Hand
               {isPlayerTurn && (
-                <span className="ml-2 text-amber-300 text-sm">● Your Turn</span>
+                <span className="ml-2 text-amber-300 text-sm">
+                  ● {turnActions.isFirstTurn ? 'Your Turn (Dealer - Must Discard First)' : 'Your Turn'}
+                </span>
               )}
             </h3>
             <div className="flex space-x-2">
@@ -1335,7 +1353,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             )}
             {isPlayerTurn && gameState.gamePhase === 'playing' && (
               <div className="mt-2">
-                {turnActions.canDraw && !drawnTile && (
+                {turnActions.isFirstTurn && (
+                  <p className="text-amber-300 font-medium">As the dealer, you start with 14 tiles and must discard first.</p>
+                )}
+                {turnActions.canDraw && !drawnTile && !turnActions.isFirstTurn && (
                   <p className="text-amber-300 font-medium">You can draw a tile.</p>
                 )}
                 {turnActions.canDiscard && (
