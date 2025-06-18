@@ -115,7 +115,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </div>
               )}
               
-              {/* Tile grid - compact layout */}
+              {/* Tile grid - compact layout with bigger tiles */}
               <div className={`grid ${gridClasses} gap-0.5 w-fit h-fit ${isBot ? '' : 'mb-1'}`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
@@ -124,7 +124,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   >
                     <TileComponent
                       tile={discard.tile}
-                      className="w-full h-full scale-[0.4] opacity-80 hover:opacity-100 hover:scale-[0.45] transition-all duration-200 border border-white/20 shadow-sm"
+                      className="scale-[0.6] opacity-80 hover:opacity-100 hover:scale-[0.65] transition-all duration-200 border border-white/20 shadow-sm"
                     />
                   </div>
                 ))}
