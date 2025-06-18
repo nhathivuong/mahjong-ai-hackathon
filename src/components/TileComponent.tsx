@@ -92,7 +92,7 @@ const TileComponent: React.FC<TileComponentProps> = ({
     <div
       onClick={onClick}
       className={`
-        w-16 h-20 ${bg} rounded-lg border-2 border-gray-300 shadow-md
+        w-16 h-16 ${bg} rounded-lg border-2 border-gray-300 shadow-md
         flex flex-col items-center justify-center cursor-pointer relative overflow-hidden
         transition-all duration-200 hover:scale-105 hover:shadow-lg
         ${isSelected ? 'border-amber-500 bg-amber-100 transform -translate-y-3 shadow-xl' : ''}
