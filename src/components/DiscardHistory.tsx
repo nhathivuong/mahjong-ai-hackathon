@@ -28,16 +28,6 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
     }
   };
 
-  const getTileRotation = (position: string): string => {
-    switch (position) {
-      case 'top': return 'rotate-180'; // Bot South - tiles face down (toward center)
-      case 'left': return 'rotate-90'; // Bot West - tiles face right (toward center)
-      case 'right': return '-rotate-90'; // Bot East - tiles face left (toward center)
-      case 'bottom': return ''; // Player - tiles face up (toward center)
-      default: return '';
-    }
-  };
-
   const groupDiscardsByPlayer = () => {
     const grouped: { [key: string]: DiscardedTile[] } = {};
     discardPile.forEach(discard => {
@@ -59,7 +49,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
       {/* Increased height from h-80 to h-96 for more space */}
       <div className="relative w-full h-96 bg-emerald-800/30 rounded-xl border border-emerald-600/30 overflow-hidden">
         
-        {/* Center - Most Recent Discard - positioned slightly higher to avoid overlap */}
+        {/* Center - Most Recent Discard */}
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
           {mostRecentDiscard && (
             <div className="text-center">
@@ -86,7 +76,6 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
           const recentDiscards = playerDiscards.slice(-8);
-          const tileRotation = getTileRotation(position);
           const isBot = player.id !== 'player1';
           
           let positionClasses = '';
@@ -126,7 +115,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </div>
               )}
               
-              {/* Tile grid with rotation */}
+              {/* Tile grid - removed rotation, all tiles face upright */}
               <div className={`grid ${gridClasses} gap-1 w-fit h-fit ${isBot ? '' : 'mb-2'}`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
@@ -135,7 +124,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   >
                     <TileComponent
                       tile={discard.tile}
-                      className={`w-full h-full scale-[0.5] opacity-80 hover:opacity-100 hover:scale-[0.6] transition-all duration-200 border border-white/20 shadow-sm ${tileRotation}`}
+                      className="w-full h-full scale-[0.5] opacity-80 hover:opacity-100 hover:scale-[0.6] transition-all duration-200 border border-white/20 shadow-sm"
                     />
                   </div>
                 ))}
