@@ -115,12 +115,12 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </div>
               )}
               
-              {/* Tile grid - slightly smaller cells and tiles */}
+              {/* Tile grid - reduced height from h-13 to h-12 */}
               <div className={`grid ${gridClasses} gap-0.5 w-fit h-fit ${isBot ? '' : 'mb-1'}`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
                     key={`${discard.playerId}-${index}`}
-                    className="w-11 h-13 flex items-center justify-center"
+                    className="w-11 h-12 flex items-center justify-center"
                   >
                     <TileComponent
                       tile={discard.tile}
@@ -129,11 +129,11 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   </div>
                 ))}
                 
-                {/* Fill empty grid cells if needed - slightly smaller cells */}
+                {/* Fill empty grid cells if needed - reduced height from h-13 to h-12 */}
                 {Array.from({ length: Math.max(0, 8 - recentDiscards.length) }, (_, index) => (
                   <div 
                     key={`empty-${index}`}
-                    className="w-11 h-13 bg-white/5 border border-white/10 rounded-sm opacity-20"
+                    className="w-11 h-12 bg-white/5 border border-white/10 rounded-sm opacity-20"
                   />
                 ))}
               </div>
