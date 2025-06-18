@@ -78,11 +78,11 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
 
-        {/* Larger Grid Player Discard Areas */}
+        {/* Player Discard Areas with Grid Layout */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
-          const recentDiscards = playerDiscards.slice(-8); // Show last 8 discards for better visibility
+          const recentDiscards = playerDiscards.slice(-8);
           
           let positionClasses = '';
           let gridClasses = '';
@@ -90,33 +90,26 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           switch (position) {
             case 'bottom':
               positionClasses = 'absolute bottom-2 left-1/2 transform -translate-x-1/2';
-              gridClasses = 'grid-cols-4 grid-rows-2'; // 4 columns, 2 rows
+              gridClasses = 'grid-cols-4 grid-rows-2';
               break;
             case 'top':
               positionClasses = 'absolute top-2 left-1/2 transform -translate-x-1/2';
-              gridClasses = 'grid-cols-4 grid-rows-2'; // 4 columns, 2 rows
+              gridClasses = 'grid-cols-4 grid-rows-2';
               break;
             case 'left':
               positionClasses = 'absolute left-2 top-1/2 transform -translate-y-1/2';
-              gridClasses = 'grid-cols-2 grid-rows-4'; // 2 columns, 4 rows
+              gridClasses = 'grid-cols-2 grid-rows-4';
               break;
             case 'right':
               positionClasses = 'absolute right-2 top-1/2 transform -translate-y-1/2';
-              gridClasses = 'grid-cols-2 grid-rows-4'; // 2 columns, 4 rows
+              gridClasses = 'grid-cols-2 grid-rows-4';
               break;
           }
 
           return (
             <div key={player.id} className={positionClasses}>
-              <div className="text-center mb-1">
-                <div className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${getPlayerColor(player.id)}`}>
-                  {player.name}
-                  <span className="ml-1 text-gray-600">({playerDiscards.length})</span>
-                </div>
-              </div>
-              
-              {/* Larger grid with bigger tiles */}
-              <div className={`grid ${gridClasses} gap-0 w-fit h-fit`}>
+              {/* Player label below the tiles */}
+              <div className={`grid ${gridClasses} gap-0 w-fit h-fit mb-1`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
                     key={`${discard.playerId}-${index}`}
@@ -138,6 +131,14 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 ))}
               </div>
               
+              {/* Player name below tiles */}
+              <div className="text-center">
+                <div className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${getPlayerColor(player.id)}`}>
+                  {player.name}
+                  {player.id === 'player1' && ' (Dealer)'}
+                </div>
+              </div>
+              
               {/* Overflow indicator */}
               {playerDiscards.length > 8 && (
                 <div className="text-center mt-1">
@@ -151,18 +152,15 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
         })}
       </div>
 
-      {/* Compact Summary Bar */}
-      <div className="mt-4 flex justify-between items-center text-sm">
-        <div className="text-emerald-200">
-          Total Active Discards: <span className="font-medium text-white">{discardPile.length}</span>
-        </div>
-        {mostRecentDiscard && (
-          <div className="text-emerald-200">
-            Last: <span className="font-medium text-white">{mostRecentDiscard.playerName}</span>
+      {/* Simplified Summary - removed total count and player count */}
+      {mostRecentDiscard && (
+        <div className="mt-4 text-center">
+          <div className="text-emerald-200 text-sm">
+            Last discard: <span className="font-medium text-white">{mostRecentDiscard.playerName}</span>
             <span className="ml-2 text-xs text-gray-300">Turn {mostRecentDiscard.turnNumber}</span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

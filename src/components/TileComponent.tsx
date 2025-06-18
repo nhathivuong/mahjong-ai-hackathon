@@ -29,14 +29,14 @@ const TileComponent: React.FC<TileComponentProps> = ({
         return {
           symbol: tile.value?.toString() || '',
           subtext: '🎋',
-          label: chineseNumbers[(tile.value || 1) - 1],
+          label: chineseNumbers[(tile.value || 1) - 1], // Keep Chinese numbers
           color: 'text-green-700',
           bg: 'bg-gradient-to-b from-green-50 to-green-100'
         };
       case 'character':
         return {
           symbol: tile.unicode,
-          label: tile.value?.toString() || '',
+          // No label needed - the unicode already shows the Chinese character
           color: 'text-red-700',
           bg: 'bg-gradient-to-b from-red-50 to-red-100'
         };
@@ -55,18 +55,14 @@ const TileComponent: React.FC<TileComponentProps> = ({
         return {
           symbol: tile.value?.toString() || '',
           subtext: dotPatterns[tile.value as keyof typeof dotPatterns] || '●',
+          // No label needed - dots are self-explanatory
           color: 'text-blue-700',
           bg: 'bg-gradient-to-b from-blue-50 to-blue-100'
         };
       case 'dragon':
-        const dragonLabels = {
-          red: 'Red',
-          green: 'Green', 
-          white: 'White'
-        };
         return {
           symbol: tile.unicode,
-          label: dragonLabels[tile.dragon as keyof typeof dragonLabels],
+          // No label needed - dragon symbols are distinctive
           color: tile.dragon === 'red' ? 'text-red-600' : 
                  tile.dragon === 'green' ? 'text-green-600' : 'text-gray-700',
           bg: tile.dragon === 'red' ? 'bg-gradient-to-b from-red-50 to-red-100' : 
@@ -82,7 +78,7 @@ const TileComponent: React.FC<TileComponentProps> = ({
         };
         return {
           symbol: tile.unicode,
-          label: windLabels[tile.wind as keyof typeof windLabels],
+          label: windLabels[tile.wind as keyof typeof windLabels], // Keep direction indicators
           color: 'text-purple-700',
           bg: 'bg-gradient-to-b from-purple-50 to-purple-100'
         };
@@ -118,7 +114,7 @@ const TileComponent: React.FC<TileComponentProps> = ({
         </div>
       )}
       
-      {/* Label (Chinese number, English direction, or dragon color) - better positioned */}
+      {/* Label - only for Chinese numbers (bamboo) and directions (wind) */}
       {label && (
         <div className="absolute bottom-0 right-0 bg-white/90 text-gray-700 text-[8px] px-1 py-0.5 rounded-tl border-l border-t border-gray-300 font-medium leading-none">
           {label}
