@@ -7,6 +7,7 @@ interface TileComponentProps {
   onClick?: () => void;
   className?: string;
   isDrawn?: boolean;
+  height?: 'normal' | 'compact'; // New prop for height control
 }
 
 const TileComponent: React.FC<TileComponentProps> = ({
@@ -14,7 +15,8 @@ const TileComponent: React.FC<TileComponentProps> = ({
   isSelected = false,
   onClick,
   className = '',
-  isDrawn = false
+  isDrawn = false,
+  height = 'normal'
 }) => {
   const getTileDisplay = (tile: Tile): { 
     symbol: string; 
@@ -88,11 +90,19 @@ const TileComponent: React.FC<TileComponentProps> = ({
 
   const { symbol, color, bg, subtext, label } = getTileDisplay(tile);
 
+  // Determine height class based on height prop
+  const heightClass = height === 'compact' ? 'h-19' : 'h-20';
+  
+  // Adjust text sizes for compact tiles
+  const symbolSize = height === 'compact' ? 'text-base' : 'text-lg';
+  const subtextSize = height === 'compact' ? 'text-[9px]' : 'text-[10px]';
+  const labelSize = height === 'compact' ? 'text-[7px]' : 'text-[8px]';
+
   return (
     <div
       onClick={onClick}
       className={`
-        w-16 h-20 ${bg} rounded-lg border-2 border-gray-300 shadow-md
+        w-16 ${heightClass} ${bg} rounded-lg border-2 border-gray-300 shadow-md
         flex flex-col items-center justify-center cursor-pointer relative overflow-hidden
         transition-all duration-200 hover:scale-105 hover:shadow-lg
         ${isSelected ? 'border-amber-500 bg-amber-100 transform -translate-y-3 shadow-xl' : ''}
@@ -102,20 +112,20 @@ const TileComponent: React.FC<TileComponentProps> = ({
       `}
     >
       {/* Main symbol - adjusted sizing for better fit */}
-      <span className={`text-lg font-bold ${color} leading-none flex-shrink-0`}>
+      <span className={`${symbolSize} font-bold ${color} leading-none flex-shrink-0`}>
         {symbol}
       </span>
       
       {/* Subtext (bamboo icon or dot pattern) - better contained */}
       {subtext && (
-        <div className={`text-[10px] ${color} text-center leading-none whitespace-pre-line flex-shrink-0 max-w-full overflow-hidden`}>
+        <div className={`${subtextSize} ${color} text-center leading-none whitespace-pre-line flex-shrink-0 max-w-full overflow-hidden`}>
           {subtext}
         </div>
       )}
       
       {/* Label - only for Chinese characters and directions (wind) */}
       {label && (
-        <div className="absolute bottom-0 right-0 bg-white/90 text-gray-700 text-[8px] px-1 py-0.5 rounded-tl border-l border-t border-gray-300 font-medium leading-none">
+        <div className={`absolute bottom-0 right-0 bg-white/90 text-gray-700 ${labelSize} px-1 py-0.5 rounded-tl border-l border-t border-gray-300 font-medium leading-none`}>
           {label}
         </div>
       )}

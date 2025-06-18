@@ -124,6 +124,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   >
                     <TileComponent
                       tile={discard.tile}
+                      height="compact"
                       className="scale-[0.55] opacity-80 hover:opacity-100 hover:scale-[0.6] transition-all duration-200 border border-white/20 shadow-sm"
                     />
                   </div>
