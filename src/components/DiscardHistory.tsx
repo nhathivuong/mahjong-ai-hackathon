@@ -78,11 +78,11 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
 
-        {/* Fixed-size Grid Player Discard Areas */}
+        {/* Larger Grid Player Discard Areas */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
-          const recentDiscards = playerDiscards.slice(-12); // Show last 12 discards for grid layout
+          const recentDiscards = playerDiscards.slice(-8); // Show last 8 discards for better visibility
           
           let positionClasses = '';
           let gridClasses = '';
@@ -90,19 +90,19 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           switch (position) {
             case 'bottom':
               positionClasses = 'absolute bottom-2 left-1/2 transform -translate-x-1/2';
-              gridClasses = 'grid-cols-6 grid-rows-2'; // 6 columns, 2 rows
+              gridClasses = 'grid-cols-4 grid-rows-2'; // 4 columns, 2 rows
               break;
             case 'top':
               positionClasses = 'absolute top-2 left-1/2 transform -translate-x-1/2';
-              gridClasses = 'grid-cols-6 grid-rows-2'; // 6 columns, 2 rows
+              gridClasses = 'grid-cols-4 grid-rows-2'; // 4 columns, 2 rows
               break;
             case 'left':
               positionClasses = 'absolute left-2 top-1/2 transform -translate-y-1/2';
-              gridClasses = 'grid-cols-2 grid-rows-6'; // 2 columns, 6 rows
+              gridClasses = 'grid-cols-2 grid-rows-4'; // 2 columns, 4 rows
               break;
             case 'right':
               positionClasses = 'absolute right-2 top-1/2 transform -translate-y-1/2';
-              gridClasses = 'grid-cols-2 grid-rows-6'; // 2 columns, 6 rows
+              gridClasses = 'grid-cols-2 grid-rows-4'; // 2 columns, 4 rows
               break;
           }
 
@@ -115,20 +115,20 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </div>
               </div>
               
-              {/* Fixed-size grid with no gaps */}
+              {/* Larger grid with bigger tiles */}
               <div className={`grid ${gridClasses} gap-0 w-fit h-fit`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
                     key={`${discard.playerId}-${index}`}
-                    className="w-6 h-8 flex items-center justify-center relative"
+                    className="w-10 h-12 flex items-center justify-center relative"
                   >
                     <TileComponent
                       tile={discard.tile}
-                      className="w-full h-full scale-[0.25] opacity-75 hover:opacity-100 hover:scale-[0.3] transition-all duration-200 border border-white/20 shadow-sm"
+                      className="w-full h-full scale-[0.5] opacity-80 hover:opacity-100 hover:scale-[0.6] transition-all duration-200 border border-white/20 shadow-sm"
                     />
                     {/* Turn number indicator for most recent discard */}
                     {index === recentDiscards.length - 1 && playerDiscards.length > 1 && (
-                      <div className="absolute -top-0.5 -right-0.5 bg-amber-500 text-white text-xs rounded-full w-2 h-2 flex items-center justify-center font-bold text-[8px] z-10">
+                      <div className="absolute -top-0.5 -right-0.5 bg-amber-500 text-white text-xs rounded-full w-3 h-3 flex items-center justify-center font-bold text-[10px] z-10">
                         !
                       </div>
                     )}
@@ -136,19 +136,19 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 ))}
                 
                 {/* Fill empty grid cells if needed */}
-                {Array.from({ length: Math.max(0, 12 - recentDiscards.length) }, (_, index) => (
+                {Array.from({ length: Math.max(0, 8 - recentDiscards.length) }, (_, index) => (
                   <div 
                     key={`empty-${index}`}
-                    className="w-6 h-8 bg-white/5 border border-white/10 rounded-sm opacity-30"
+                    className="w-10 h-12 bg-white/5 border border-white/10 rounded-sm opacity-30"
                   />
                 ))}
               </div>
               
               {/* Overflow indicator */}
-              {playerDiscards.length > 12 && (
+              {playerDiscards.length > 8 && (
                 <div className="text-center mt-1">
-                  <div className="inline-block px-1 py-0.5 bg-white/20 rounded text-xs text-white font-bold">
-                    +{playerDiscards.length - 12}
+                  <div className="inline-block px-2 py-1 bg-white/20 rounded text-xs text-white font-bold">
+                    +{playerDiscards.length - 8}
                   </div>
                 </div>
               )}
