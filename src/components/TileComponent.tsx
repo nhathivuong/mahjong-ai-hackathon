@@ -25,18 +25,17 @@ const TileComponent: React.FC<TileComponentProps> = ({
   } => {
     switch (tile.type) {
       case 'bamboo':
-        const chineseNumbers = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
         return {
           symbol: tile.value?.toString() || '',
           subtext: '🎋',
-          label: chineseNumbers[(tile.value || 1) - 1], // Keep Chinese numbers
+          // No label needed - bamboo tiles are clear with number and bamboo icon
           color: 'text-green-700',
           bg: 'bg-gradient-to-b from-green-50 to-green-100'
         };
       case 'character':
         return {
           symbol: tile.unicode,
-          // No label needed - the unicode already shows the Chinese character
+          label: tile.value?.toString() || '', // Keep numeric indicator for Chinese characters
           color: 'text-red-700',
           bg: 'bg-gradient-to-b from-red-50 to-red-100'
         };
@@ -114,7 +113,7 @@ const TileComponent: React.FC<TileComponentProps> = ({
         </div>
       )}
       
-      {/* Label - only for Chinese numbers (bamboo) and directions (wind) */}
+      {/* Label - only for Chinese characters and directions (wind) */}
       {label && (
         <div className="absolute bottom-0 right-0 bg-white/90 text-gray-700 text-[8px] px-1 py-0.5 rounded-tl border-l border-t border-gray-300 font-medium leading-none">
           {label}
