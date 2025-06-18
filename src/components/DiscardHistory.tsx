@@ -56,10 +56,10 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
     <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
       <h3 className="text-white font-medium text-lg mb-4">Active Discards</h3>
       
-      {/* Optimized Central Layout */}
-      <div className="relative w-full h-80 bg-emerald-800/30 rounded-xl border border-emerald-600/30 overflow-hidden">
+      {/* Increased height from h-80 to h-96 for more space */}
+      <div className="relative w-full h-96 bg-emerald-800/30 rounded-xl border border-emerald-600/30 overflow-hidden">
         
-        {/* Center - Most Recent Discard */}
+        {/* Center - Most Recent Discard - positioned slightly higher to avoid overlap */}
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
           {mostRecentDiscard && (
             <div className="text-center">
@@ -81,7 +81,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
 
-        {/* Player Discard Areas with Proper Positioning */}
+        {/* Player Discard Areas with Better Spacing */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
@@ -94,19 +94,23 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           
           switch (position) {
             case 'bottom':
-              positionClasses = 'absolute bottom-2 left-1/2 transform -translate-x-1/2';
+              // Moved further from center to prevent overlap
+              positionClasses = 'absolute bottom-4 left-1/2 transform -translate-x-1/2';
               gridClasses = 'grid-cols-4 grid-rows-2';
               break;
             case 'top':
-              positionClasses = 'absolute top-2 left-1/2 transform -translate-x-1/2';
+              // Moved further from center to prevent overlap
+              positionClasses = 'absolute top-4 left-1/2 transform -translate-x-1/2';
               gridClasses = 'grid-cols-4 grid-rows-2';
               break;
             case 'left':
-              positionClasses = 'absolute left-2 top-1/2 transform -translate-y-1/2';
+              // Moved further from center to prevent overlap
+              positionClasses = 'absolute left-4 top-1/2 transform -translate-y-1/2';
               gridClasses = 'grid-cols-2 grid-rows-4';
               break;
             case 'right':
-              positionClasses = 'absolute right-2 top-1/2 transform -translate-y-1/2';
+              // Moved further from center to prevent overlap
+              positionClasses = 'absolute right-4 top-1/2 transform -translate-y-1/2';
               gridClasses = 'grid-cols-2 grid-rows-4';
               break;
           }
@@ -115,7 +119,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
             <div key={player.id} className={positionClasses}>
               {/* Bot labels on top, Player label below */}
               {isBot && (
-                <div className="text-center mb-1">
+                <div className="text-center mb-2">
                   <div className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${getPlayerColor(player.id)}`}>
                     {player.name}
                   </div>
@@ -123,7 +127,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
               )}
               
               {/* Tile grid with rotation */}
-              <div className={`grid ${gridClasses} gap-0 w-fit h-fit ${isBot ? '' : 'mb-1'}`}>
+              <div className={`grid ${gridClasses} gap-1 w-fit h-fit ${isBot ? '' : 'mb-2'}`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
                     key={`${discard.playerId}-${index}`}
