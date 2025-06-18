@@ -86,7 +86,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           
           let positionClasses = '';
           let flexDirection = '';
-          let tileScale = 'scale-[0.4]'; // Smaller tiles for compact layout
+          let tileScale = 'scale-[0.35]'; // Slightly smaller tiles for more compact layout
           
           switch (position) {
             case 'bottom':
@@ -116,17 +116,17 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </div>
               </div>
               
-              {/* Compact tile display with better spacing */}
-              <div className={`flex ${flexDirection} gap-0.5 max-w-xs max-h-64 overflow-hidden`}>
+              {/* Ultra-compact tile display with minimal spacing */}
+              <div className={`flex ${flexDirection} -space-x-1 -space-y-1 max-w-xs max-h-64 overflow-hidden`}>
                 {recentDiscards.map((discard, index) => (
                   <div key={`${discard.playerId}-${index}`} className="relative">
                     <TileComponent
                       tile={discard.tile}
-                      className={`${tileScale} opacity-75 hover:opacity-100 hover:scale-[0.45] transition-all duration-200 border border-white/20`}
+                      className={`${tileScale} opacity-75 hover:opacity-100 hover:scale-[0.4] transition-all duration-200 border border-white/20 shadow-sm`}
                     />
                     {/* Turn number indicator for recent discards */}
                     {index === recentDiscards.length - 1 && playerDiscards.length > 1 && (
-                      <div className="absolute -top-1 -right-1 bg-amber-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                      <div className="absolute -top-0.5 -right-0.5 bg-amber-500 text-white text-xs rounded-full w-3 h-3 flex items-center justify-center font-bold text-[10px]">
                         !
                       </div>
                     )}
@@ -135,7 +135,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 
                 {/* Overflow indicator */}
                 {playerDiscards.length > 8 && (
-                  <div className="flex items-center justify-center w-6 h-8 bg-white/20 rounded-md border border-white/30">
+                  <div className="flex items-center justify-center w-5 h-7 bg-white/20 rounded-md border border-white/30 ml-1">
                     <span className="text-white text-xs font-bold">
                       +{playerDiscards.length - 8}
                     </span>
