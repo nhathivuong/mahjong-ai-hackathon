@@ -120,18 +120,12 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 {recentDiscards.map((discard, index) => (
                   <div 
                     key={`${discard.playerId}-${index}`}
-                    className="w-10 h-12 flex items-center justify-center relative"
+                    className="w-10 h-12 flex items-center justify-center"
                   >
                     <TileComponent
                       tile={discard.tile}
                       className="w-full h-full scale-[0.5] opacity-80 hover:opacity-100 hover:scale-[0.6] transition-all duration-200 border border-white/20 shadow-sm"
                     />
-                    {/* Turn number indicator for most recent discard */}
-                    {index === recentDiscards.length - 1 && playerDiscards.length > 1 && (
-                      <div className="absolute -top-0.5 -right-0.5 bg-amber-500 text-white text-xs rounded-full w-3 h-3 flex items-center justify-center font-bold text-[10px] z-10">
-                        !
-                      </div>
-                    )}
                   </div>
                 ))}
                 
