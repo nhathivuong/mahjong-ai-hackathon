@@ -71,7 +71,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
 
-        {/* Player Discard Areas with Better Spacing and Slightly Smaller Tiles */}
+        {/* Player Discard Areas with Smaller Tiles */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
@@ -115,7 +115,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </div>
               )}
               
-              {/* Tile grid - reduced height from h-12 to h-11 */}
+              {/* Tile grid - keeping h-11 but reducing tile scale */}
               <div className={`grid ${gridClasses} gap-0.5 w-fit h-fit ${isBot ? '' : 'mb-1'}`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
@@ -124,12 +124,12 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   >
                     <TileComponent
                       tile={discard.tile}
-                      className="scale-[0.65] opacity-80 hover:opacity-100 hover:scale-[0.7] transition-all duration-200 border border-white/20 shadow-sm"
+                      className="scale-[0.55] opacity-80 hover:opacity-100 hover:scale-[0.6] transition-all duration-200 border border-white/20 shadow-sm"
                     />
                   </div>
                 ))}
                 
-                {/* Fill empty grid cells if needed - reduced height from h-12 to h-11 */}
+                {/* Fill empty grid cells if needed */}
                 {Array.from({ length: Math.max(0, 8 - recentDiscards.length) }, (_, index) => (
                   <div 
                     key={`empty-${index}`}
