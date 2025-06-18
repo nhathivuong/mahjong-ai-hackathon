@@ -111,9 +111,9 @@ const TileComponent: React.FC<TileComponentProps> = ({
         {symbol}
       </span>
       
-      {/* Subtext (bamboo icon or dot pattern) */}
+      {/* Subtext (bamboo icon or dot pattern) - removed mt-1 margin */}
       {subtext && (
-        <div className={`text-xs ${color} mt-1 text-center leading-tight whitespace-pre-line`}>
+        <div className={`text-xs ${color} text-center leading-tight whitespace-pre-line`}>
           {subtext}
         </div>
       )}
