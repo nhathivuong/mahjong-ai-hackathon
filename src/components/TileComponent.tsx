@@ -90,19 +90,20 @@ const TileComponent: React.FC<TileComponentProps> = ({
 
   const { symbol, color, bg, subtext, label } = getTileDisplay(tile);
 
-  // Determine height class based on height prop
-  const heightClass = height === 'compact' ? 'h-19' : 'h-20';
+  // Fixed height for compact tiles - using h-[38px] for exact pixel control
+  const heightClass = height === 'compact' ? 'h-[38px]' : 'h-20';
+  const widthClass = height === 'compact' ? 'w-[30px]' : 'w-16';
   
   // Adjust text sizes for compact tiles
-  const symbolSize = height === 'compact' ? 'text-base' : 'text-lg';
-  const subtextSize = height === 'compact' ? 'text-[9px]' : 'text-[10px]';
-  const labelSize = height === 'compact' ? 'text-[7px]' : 'text-[8px]';
+  const symbolSize = height === 'compact' ? 'text-xs' : 'text-lg';
+  const subtextSize = height === 'compact' ? 'text-[8px]' : 'text-[10px]';
+  const labelSize = height === 'compact' ? 'text-[6px]' : 'text-[8px]';
 
   return (
     <div
       onClick={onClick}
       className={`
-        w-16 ${heightClass} ${bg} rounded-lg border-2 border-gray-300 shadow-md
+        ${widthClass} ${heightClass} ${bg} rounded-lg border-2 border-gray-300 shadow-md
         flex flex-col items-center justify-center cursor-pointer relative overflow-hidden
         transition-all duration-200 hover:scale-105 hover:shadow-lg
         ${isSelected ? 'border-amber-500 bg-amber-100 transform -translate-y-3 shadow-xl' : ''}
@@ -124,7 +125,7 @@ const TileComponent: React.FC<TileComponentProps> = ({
       )}
       
       {/* Label - only for Chinese characters and directions (wind) */}
-      {label && (
+      {label && height !== 'compact' && (
         <div className={`absolute bottom-0 right-0 bg-white/90 text-gray-700 ${labelSize} px-1 py-0.5 rounded-tl border-l border-t border-gray-300 font-medium leading-none`}>
           {label}
         </div>

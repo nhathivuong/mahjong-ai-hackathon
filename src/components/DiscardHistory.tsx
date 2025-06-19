@@ -115,17 +115,17 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </div>
               )}
               
-              {/* Tile grid with uniform containers - fixed size containers for consistent layout */}
+              {/* Tile grid with uniform containers - exact pixel dimensions for consistency */}
               <div className={`grid ${gridClasses} gap-0.5 w-fit h-fit ${isBot ? '' : 'mb-1'}`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
                     key={`${discard.playerId}-${index}`}
-                    className="w-[35px] h-[42px] flex items-center justify-center bg-white/5 rounded-sm border border-white/10"
+                    className="w-[32px] h-[40px] flex items-center justify-center bg-white/5 rounded-sm border border-white/10"
                   >
                     <TileComponent
                       tile={discard.tile}
                       height="compact"
-                      className="scale-[0.55] opacity-80 hover:opacity-100 hover:scale-[0.6] transition-all duration-200 border border-white/20 shadow-sm"
+                      className="opacity-80 hover:opacity-100 transition-opacity duration-200"
                     />
                   </div>
                 ))}
@@ -134,7 +134,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 {Array.from({ length: Math.max(0, 8 - recentDiscards.length) }, (_, index) => (
                   <div 
                     key={`empty-${index}`}
-                    className="w-[35px] h-[42px] bg-white/5 border border-white/10 rounded-sm opacity-20"
+                    className="w-[32px] h-[40px] bg-white/5 border border-white/10 rounded-sm opacity-20"
                   />
                 ))}
               </div>
