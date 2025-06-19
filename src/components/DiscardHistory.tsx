@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { DiscardedTile } from '../types/mahjong';
 import TileComponent from './TileComponent';
-import { ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface DiscardHistoryProps {
   discardPile: DiscardedTile[];
@@ -10,7 +10,6 @@ interface DiscardHistoryProps {
 
 const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players }) => {
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
-  const [showAllTiles, setShowAllTiles] = useState(false);
 
   const getPlayerPosition = (playerId: string): string => {
     switch (playerId) {
@@ -102,18 +101,12 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
     <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-white font-medium text-lg">Discard History</h3>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setShowAllTiles(!showAllTiles)}
-            className="flex items-center space-x-2 px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white text-sm"
-          >
-            {showAllTiles ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            <span>{showAllTiles ? 'Show Recent' : 'Show All'}</span>
-          </button>
+        <div className="text-emerald-200 text-sm">
+          Click player names to see detailed view
         </div>
       </div>
       
-      {/* Enhanced layout with better spacing */}
+      {/* Enhanced layout with better spacing - Always showing all tiles */}
       <div className="relative w-full h-[32rem] bg-emerald-800/30 rounded-xl border border-emerald-600/30 overflow-hidden">
         
         {/* Center - Most Recent Discard */}
@@ -145,37 +138,35 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
 
-        {/* Player Discard Areas */}
+        {/* Player Discard Areas - Always showing all tiles */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
-          const displayDiscards = showAllTiles ? playerDiscards : playerDiscards.slice(-12);
-          const isBot = player.id !== 'player1';
           
           let positionClasses = '';
-          let gridClasses = '';
-          let maxTiles = 12;
+          let containerClasses = '';
+          let scrollDirection = '';
           
           switch (position) {
             case 'bottom':
               positionClasses = 'absolute bottom-2 left-1/2 transform -translate-x-1/2';
-              gridClasses = 'grid-cols-6 grid-rows-2';
-              maxTiles = 12;
+              containerClasses = 'max-w-[400px] max-h-20';
+              scrollDirection = 'overflow-x-auto overflow-y-hidden';
               break;
             case 'top':
               positionClasses = 'absolute top-2 left-1/2 transform -translate-x-1/2';
-              gridClasses = 'grid-cols-6 grid-rows-2';
-              maxTiles = 12;
+              containerClasses = 'max-w-[400px] max-h-20';
+              scrollDirection = 'overflow-x-auto overflow-y-hidden';
               break;
             case 'left':
               positionClasses = 'absolute left-2 top-1/2 transform -translate-y-1/2';
-              gridClasses = 'grid-cols-2 grid-rows-6';
-              maxTiles = 12;
+              containerClasses = 'max-h-[300px] max-w-20';
+              scrollDirection = 'overflow-y-auto overflow-x-hidden';
               break;
             case 'right':
               positionClasses = 'absolute right-2 top-1/2 transform -translate-y-1/2';
-              gridClasses = 'grid-cols-2 grid-rows-6';
-              maxTiles = 12;
+              containerClasses = 'max-h-[300px] max-w-20';
+              scrollDirection = 'overflow-y-auto overflow-x-hidden';
               break;
           }
 
@@ -193,42 +184,34 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </button>
               </div>
               
-              {/* Tile grid */}
-              <div className={`grid ${gridClasses} gap-0.5 w-fit h-fit`}>
-                {displayDiscards.slice(0, maxTiles).map((discard, index) => (
-                  <div 
-                    key={`${discard.playerId}-${index}`}
-                    className="w-[32px] h-[40px] flex items-center justify-center bg-white/5 rounded-md border border-white/10 relative group"
-                  >
-                    <TileComponent
-                      tile={discard.tile}
-                      height="compact"
-                      className="opacity-80 hover:opacity-100 transition-opacity duration-200"
-                    />
-                    {/* Turn number on hover */}
-                    <div className="absolute -top-1 -right-1 bg-black/70 text-white text-xs rounded-full w-3 h-3 flex items-center justify-center font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                      {discard.turnNumber}
+              {/* Scrollable tile container */}
+              <div className={`${containerClasses} ${scrollDirection} bg-white/5 rounded-lg border border-white/10 p-1`}>
+                <div className={`flex ${position === 'left' || position === 'right' ? 'flex-col' : 'flex-row'} gap-1`}>
+                  {playerDiscards.map((discard, index) => (
+                    <div 
+                      key={`${discard.playerId}-${index}`}
+                      className="flex-shrink-0 relative group"
+                    >
+                      <TileComponent
+                        tile={discard.tile}
+                        height="compact"
+                        className="opacity-80 hover:opacity-100 transition-opacity duration-200"
+                      />
+                      {/* Turn number on hover */}
+                      <div className="absolute -top-1 -right-1 bg-black/70 text-white text-xs rounded-full w-3 h-3 flex items-center justify-center font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                        {discard.turnNumber}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                
-                {/* Fill empty grid cells if not showing all tiles */}
-                {!showAllTiles && Array.from({ length: Math.max(0, maxTiles - displayDiscards.length) }, (_, index) => (
-                  <div 
-                    key={`empty-${index}`}
-                    className="w-[32px] h-[40px] bg-white/5 border border-white/10 rounded-md opacity-20"
-                  />
-                ))}
-              </div>
-              
-              {/* Overflow indicator */}
-              {!showAllTiles && playerDiscards.length > maxTiles && (
-                <div className="text-center mt-0.5">
-                  <div className="inline-block px-1.5 py-0.5 bg-amber-500/80 rounded text-xs text-white font-bold">
-                    +{playerDiscards.length - maxTiles} more
-                  </div>
+                  ))}
+                  
+                  {/* Empty state */}
+                  {playerDiscards.length === 0 && (
+                    <div className="flex items-center justify-center text-emerald-300 text-xs p-2">
+                      No discards
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           );
         })}
@@ -246,7 +229,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           </div>
         )}
         <div className="text-emerald-200 text-xs">
-          Click player names to see all their discards
+          Scroll to see all tiles • Click names for detailed view
         </div>
       </div>
     </div>
