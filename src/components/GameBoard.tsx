@@ -922,57 +922,63 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         </div>
 
-        {/* Streamlined Claim Dialog */}
+        {/* Compact Claim Dialog - Positioned at top center */}
         {showClaimDialog && (
-          <div className="fixed top-4 right-4 z-40 max-w-sm">
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-gray-200">
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-40">
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-gray-200 max-w-2xl">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-bold text-gray-800">Claim Tile?</h3>
-                <button
-                  onClick={handleSkipClaim}
-                  className="text-gray-500 hover:text-gray-700 text-sm"
-                >
-                  ✕
-                </button>
+                <h3 className="text-lg font-bold text-gray-800">Claim Discarded Tile?</h3>
+                <div className="text-sm text-gray-600">Choose an action or skip</div>
               </div>
               
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {claimOptions.map((option, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                    <div className="flex items-center justify-between mb-2">
-                      <button
-                        onClick={() => handleClaim(option)}
-                        className={`px-4 py-2 text-white rounded font-medium transition-colors ${
-                          option.type === 'chow' ? 'bg-blue-500 hover:bg-blue-600' :
-                          option.type === 'pung' ? 'bg-green-500 hover:bg-green-600' :
-                          'bg-purple-500 hover:bg-purple-600'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-center space-x-1">
-                      {option.tiles.map((tile, tileIndex) => (
+              {/* Tiles Preview */}
+              <div className="flex items-center justify-center space-x-2 mb-4 p-3 bg-gray-50 rounded-lg">
+                {claimOptions.length > 0 && (
+                  <>
+                    <div className="flex items-center space-x-1">
+                      <span className="text-xs text-gray-600 font-medium">Your tiles:</span>
+                      {claimOptions[0].tiles.map((tile, tileIndex) => (
                         <TileComponent
                           key={tileIndex}
                           tile={tile}
-                          className="scale-50"
+                          height="compact"
+                          className="scale-75"
                         />
                       ))}
-                      <span className="text-xs text-gray-600 mx-1">+</span>
+                    </div>
+                    <span className="text-gray-400 font-bold">+</span>
+                    <div className="flex items-center space-x-1">
+                      <span className="text-xs text-gray-600 font-medium">Claimed:</span>
                       <TileComponent
-                        tile={option.discardedTile}
-                        className="scale-50 border-2 border-amber-400"
+                        tile={claimOptions[0].discardedTile}
+                        height="compact"
+                        className="scale-75 border-2 border-amber-400"
                       />
                     </div>
-                  </div>
-                ))}
+                  </>
+                )}
               </div>
               
-              <div className="flex justify-end mt-3">
+              {/* Action Buttons - Horizontal Layout */}
+              <div className="flex items-center justify-center space-x-3">
+                {claimOptions.map((option, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleClaim(option)}
+                    className={`px-6 py-3 text-white rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg ${
+                      option.type === 'chow' ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700' :
+                      option.type === 'pung' ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' :
+                      'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                
+                {/* Skip Button */}
                 <button
                   onClick={handleSkipClaim}
-                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors"
+                  className="px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg"
                 >
                   Skip
                 </button>
