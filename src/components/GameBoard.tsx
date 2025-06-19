@@ -301,7 +301,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       options.push({
         type: 'kong',
         tiles: kongTiles,
-        label: 'Kong (4 of a kind)',
+        label: 'Kong',
         discardedTile
       });
     }
@@ -312,7 +312,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       options.push({
         type: 'pung',
         tiles: pungTiles,
-        label: 'Pung (3 of a kind)',
+        label: 'Pung',
         discardedTile
       });
     }
@@ -323,7 +323,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       options.push({
         type: 'chow',
         tiles: chowTiles,
-        label: 'Chow (sequence)',
+        label: 'Chow',
         discardedTile
       });
     });
@@ -922,7 +922,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         </div>
 
-        {/* Compact Claim Dialog - Positioned at top right */}
+        {/* Streamlined Claim Dialog */}
         {showClaimDialog && (
           <div className="fixed top-4 right-4 z-40 max-w-sm">
             <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-gray-200">
@@ -940,16 +940,18 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 {claimOptions.map((option, index) => (
                   <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-gray-800 text-sm">{option.label}</h4>
                       <button
                         onClick={() => handleClaim(option)}
-                        className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-sm transition-colors"
+                        className={`px-4 py-2 text-white rounded font-medium transition-colors ${
+                          option.type === 'chow' ? 'bg-blue-500 hover:bg-blue-600' :
+                          option.type === 'pung' ? 'bg-green-500 hover:bg-green-600' :
+                          'bg-purple-500 hover:bg-purple-600'
+                        }`}
                       >
-                        Claim
+                        {option.label}
                       </button>
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <span className="text-xs text-gray-600">Your:</span>
+                    <div className="flex items-center justify-center space-x-1">
                       {option.tiles.map((tile, tileIndex) => (
                         <TileComponent
                           key={tileIndex}
@@ -957,7 +959,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                           className="scale-50"
                         />
                       ))}
-                      <span className="text-xs text-gray-600">+</span>
+                      <span className="text-xs text-gray-600 mx-1">+</span>
                       <TileComponent
                         tile={option.discardedTile}
                         className="scale-50 border-2 border-amber-400"
