@@ -71,7 +71,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
 
-        {/* Player Discard Areas with Smaller Tiles */}
+        {/* Player Discard Areas with Uniform Tile Containers */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
@@ -115,12 +115,12 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </div>
               )}
               
-              {/* Tile grid - keeping h-11 but reducing tile scale */}
+              {/* Tile grid with uniform containers - fixed size containers for consistent layout */}
               <div className={`grid ${gridClasses} gap-0.5 w-fit h-fit ${isBot ? '' : 'mb-1'}`}>
                 {recentDiscards.map((discard, index) => (
                   <div 
                     key={`${discard.playerId}-${index}`}
-                    className="w-11 h-11 flex items-center justify-center"
+                    className="w-[35px] h-[42px] flex items-center justify-center bg-white/5 rounded-sm border border-white/10"
                   >
                     <TileComponent
                       tile={discard.tile}
@@ -130,11 +130,11 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   </div>
                 ))}
                 
-                {/* Fill empty grid cells if needed */}
+                {/* Fill empty grid cells with uniform containers */}
                 {Array.from({ length: Math.max(0, 8 - recentDiscards.length) }, (_, index) => (
                   <div 
                     key={`empty-${index}`}
-                    className="w-11 h-11 bg-white/5 border border-white/10 rounded-sm opacity-20"
+                    className="w-[35px] h-[42px] bg-white/5 border border-white/10 rounded-sm opacity-20"
                   />
                 ))}
               </div>
