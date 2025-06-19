@@ -94,6 +94,9 @@ const TileComponent: React.FC<TileComponentProps> = ({
   const heightClass = height === 'compact' ? 'h-[38px]' : 'h-20';
   const widthClass = height === 'compact' ? 'w-[30px]' : 'w-16';
   
+  // Different border radius for compact vs normal tiles
+  const borderRadiusClass = height === 'compact' ? 'rounded-sm' : 'rounded-lg';
+  
   // Adjust text sizes for compact tiles
   const symbolSize = height === 'compact' ? 'text-xs' : 'text-lg';
   const subtextSize = height === 'compact' ? 'text-[8px]' : 'text-[10px]';
@@ -103,7 +106,7 @@ const TileComponent: React.FC<TileComponentProps> = ({
     <div
       onClick={onClick}
       className={`
-        ${widthClass} ${heightClass} ${bg} rounded-lg border-2 border-gray-300 shadow-md
+        ${widthClass} ${heightClass} ${bg} ${borderRadiusClass} border-2 border-gray-300 shadow-md
         flex flex-col items-center justify-center cursor-pointer relative overflow-hidden
         transition-all duration-200 hover:scale-105 hover:shadow-lg
         ${isSelected ? 'border-amber-500 bg-amber-100 transform -translate-y-3 shadow-xl' : ''}
