@@ -94,8 +94,8 @@ const TileComponent: React.FC<TileComponentProps> = ({
   const heightClass = height === 'compact' ? 'h-[38px]' : 'h-20';
   const widthClass = height === 'compact' ? 'w-[30px]' : 'w-16';
   
-  // Different border radius for compact vs normal tiles
-  const borderRadiusClass = height === 'compact' ? 'rounded-sm' : 'rounded-lg';
+  // Different border radius for compact vs normal tiles - using rounded-md for compact
+  const borderRadiusClass = height === 'compact' ? 'rounded-md' : 'rounded-lg';
   
   // Adjust text sizes for compact tiles
   const symbolSize = height === 'compact' ? 'text-xs' : 'text-lg';

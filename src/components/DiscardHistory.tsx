@@ -120,7 +120,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 {recentDiscards.map((discard, index) => (
                   <div 
                     key={`${discard.playerId}-${index}`}
-                    className="w-[32px] h-[40px] flex items-center justify-center bg-white/5 rounded-sm border border-white/10"
+                    className="w-[32px] h-[40px] flex items-center justify-center bg-white/5 rounded-md border border-white/10"
                   >
                     <TileComponent
                       tile={discard.tile}
@@ -134,7 +134,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 {Array.from({ length: Math.max(0, 8 - recentDiscards.length) }, (_, index) => (
                   <div 
                     key={`empty-${index}`}
-                    className="w-[32px] h-[40px] bg-white/5 border border-white/10 rounded-sm opacity-20"
+                    className="w-[32px] h-[40px] bg-white/5 border border-white/10 rounded-md opacity-20"
                   />
                 ))}
               </div>
