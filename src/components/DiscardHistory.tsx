@@ -72,9 +72,6 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
   const getGridClasses = (tileCount: number): string => {
     const { cols } = calculateGridDimensions(tileCount);
     
-    // Dynamic grid template columns with responsive breakpoints
-    const gridColsClass = `grid-cols-${Math.min(cols, 12)}`;
-    
     // Responsive adjustments for different screen sizes
     let responsiveClasses = '';
     if (cols <= 3) {
@@ -92,9 +89,6 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
 
   // Calculate tile size based on container and tile count
   const getTileSize = (tileCount: number): string => {
-    const { cols, rows } = calculateGridDimensions(tileCount);
-    
-    // Base size calculations to ensure minimum 50px and proper scaling
     if (tileCount <= 4) {
       return 'w-16 h-20'; // Larger for few tiles
     } else if (tileCount <= 9) {
@@ -217,12 +211,10 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
 
-        {/* Player Discard Areas - Responsive Grid Layout */}
+        {/* Player Discard Areas - Clean Fixed Layout */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
-          const gridClasses = getGridClasses(playerDiscards.length);
-          const tileSize = getTileSize(playerDiscards.length);
           
           let positionClasses = '';
           let containerClasses = '';
@@ -230,19 +222,19 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           switch (position) {
             case 'bottom':
               positionClasses = 'absolute bottom-2 left-1/2 transform -translate-x-1/2';
-              containerClasses = 'max-w-[400px] max-h-20';
+              containerClasses = 'max-w-[400px]';
               break;
             case 'top':
               positionClasses = 'absolute top-2 left-1/2 transform -translate-x-1/2';
-              containerClasses = 'max-w-[400px] max-h-20';
+              containerClasses = 'max-w-[400px]';
               break;
             case 'left':
               positionClasses = 'absolute left-2 top-1/2 transform -translate-y-1/2';
-              containerClasses = 'max-h-[300px] max-w-20';
+              containerClasses = 'max-w-20';
               break;
             case 'right':
               positionClasses = 'absolute right-2 top-1/2 transform -translate-y-1/2';
-              containerClasses = 'max-h-[300px] max-w-20';
+              containerClasses = 'max-w-20';
               break;
           }
 
@@ -260,36 +252,34 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 </button>
               </div>
               
-              {/* Responsive tile container */}
-              <div className={`${containerClasses} overflow-hidden bg-white/5 rounded-lg border border-white/10 p-1`}>
+              {/* Clean tile container without scroll indicators */}
+              <div className={`${containerClasses} bg-white/5 rounded-lg border border-white/10 p-1`}>
                 {playerDiscards.length > 0 ? (
-                  <div className="overflow-auto h-full">
-                    <div className={`${position === 'left' || position === 'right' ? 'flex flex-col' : 'flex flex-row'} gap-1 flex-wrap`}>
-                      {playerDiscards.slice(0, 8).map((discard, index) => (
-                        <div 
-                          key={`${discard.playerId}-${index}`}
-                          className="flex-shrink-0 relative group"
-                        >
-                          <TileComponent
-                            tile={discard.tile}
-                            height="compact"
-                            className="opacity-80 hover:opacity-100 transition-opacity duration-200"
-                          />
-                          {/* Turn number on hover */}
-                          <div className="absolute -top-1 -right-1 bg-black/70 text-white text-xs rounded-full w-3 h-3 flex items-center justify-center font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                            {discard.turnNumber}
-                          </div>
+                  <div className={`${position === 'left' || position === 'right' ? 'flex flex-col' : 'flex flex-row'} gap-1 flex-wrap justify-center`}>
+                    {playerDiscards.slice(0, 8).map((discard, index) => (
+                      <div 
+                        key={`${discard.playerId}-${index}`}
+                        className="flex-shrink-0 relative group"
+                      >
+                        <TileComponent
+                          tile={discard.tile}
+                          height="compact"
+                          className="opacity-80 hover:opacity-100 transition-opacity duration-200"
+                        />
+                        {/* Turn number on hover */}
+                        <div className="absolute -top-1 -right-1 bg-black/70 text-white text-xs rounded-full w-3 h-3 flex items-center justify-center font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                          {discard.turnNumber}
                         </div>
-                      ))}
-                      {playerDiscards.length > 8 && (
-                        <div className="flex items-center justify-center text-emerald-300 text-xs p-1">
-                          +{playerDiscards.length - 8}
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    ))}
+                    {playerDiscards.length > 8 && (
+                      <div className="flex items-center justify-center text-emerald-300 text-xs p-1 bg-white/10 rounded border border-white/20">
+                        +{playerDiscards.length - 8}
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center text-emerald-300 text-xs p-2 h-full">
+                  <div className="flex items-center justify-center text-emerald-300 text-xs p-2">
                     No discards
                   </div>
                 )}
