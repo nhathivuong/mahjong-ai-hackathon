@@ -68,8 +68,64 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
     return { cols: bestCols, rows: bestRows };
   };
 
-  // Generate responsive grid classes based on tile count
-  const getGridClasses = (tileCount: number): string => {
+  // Calculate responsive layout for top/bottom players based on tile count
+  const getResponsiveLayout = (tileCount: number, position: string) => {
+    if (position !== 'top' && position !== 'bottom') {
+      // Side players keep single column/row layout
+      return {
+        maxTiles: Math.min(tileCount, 12),
+        layout: position === 'left' || position === 'right' ? 'vertical' : 'horizontal',
+        showMultiRow: false
+      };
+    }
+
+    // Desktop responsive logic for top/bottom players
+    const breakpoints = {
+      mobile: { maxCols: 6, maxRows: 1 },
+      tablet: { maxCols: 8, maxRows: 2 },
+      desktop: { maxCols: 10, maxRows: 2 },
+      large: { maxCols: 12, maxRows: 3 }
+    };
+
+    // Determine if we should show multi-row layout
+    const showMultiRow = tileCount > 8;
+    const maxTiles = showMultiRow ? Math.min(tileCount, 24) : Math.min(tileCount, 12);
+
+    return {
+      maxTiles,
+      layout: 'grid',
+      showMultiRow,
+      breakpoints
+    };
+  };
+
+  // Generate responsive grid classes based on tile count and position
+  const getGridClasses = (tileCount: number, position: string): string => {
+    const layout = getResponsiveLayout(tileCount, position);
+    
+    if (position === 'left' || position === 'right') {
+      // Vertical layout for side players
+      return 'flex flex-col gap-1 max-h-[280px] overflow-hidden';
+    }
+
+    if (!layout.showMultiRow) {
+      // Single row layout for fewer tiles
+      return 'flex flex-row gap-1 flex-wrap justify-center max-w-[500px]';
+    }
+
+    // Multi-row responsive grid for top/bottom players
+    const { cols } = calculateGridDimensions(Math.min(tileCount, layout.maxTiles));
+    const gridCols = Math.min(cols, 12);
+
+    return `grid gap-1 justify-center max-w-[600px]
+      grid-cols-${Math.min(gridCols, 6)} 
+      sm:grid-cols-${Math.min(gridCols, 8)} 
+      md:grid-cols-${Math.min(gridCols, 10)} 
+      lg:grid-cols-${gridCols}`;
+  };
+
+  // Generate responsive grid classes for detailed view
+  const getDetailedGridClasses = (tileCount: number): string => {
     const { cols } = calculateGridDimensions(tileCount);
     
     // Responsive adjustments for different screen sizes
@@ -107,7 +163,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
   if (selectedPlayer) {
     const playerDiscards = groupedDiscards[selectedPlayer] || [];
     const playerName = players.find(p => p.id === selectedPlayer)?.name || 'Unknown';
-    const gridClasses = getGridClasses(playerDiscards.length);
+    const gridClasses = getDetailedGridClasses(playerDiscards.length);
     const tileSize = getTileSize(playerDiscards.length);
     
     return (
@@ -179,7 +235,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
         </div>
       </div>
       
-      {/* Enhanced layout with better spacing - Always showing all tiles */}
+      {/* Enhanced layout with responsive multi-row support */}
       <div className="relative w-full h-[32rem] bg-emerald-800/30 rounded-xl border border-emerald-600/30 overflow-hidden">
         
         {/* Center - Most Recent Discard */}
@@ -211,10 +267,11 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
 
-        {/* Player Discard Areas - Clean Fixed Layout */}
+        {/* Player Discard Areas - Enhanced Responsive Layout */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
+          const layout = getResponsiveLayout(playerDiscards.length, position);
           
           let positionClasses = '';
           let containerClasses = '';
@@ -222,11 +279,11 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           switch (position) {
             case 'bottom':
               positionClasses = 'absolute bottom-2 left-1/2 transform -translate-x-1/2';
-              containerClasses = 'max-w-[400px]';
+              containerClasses = layout.showMultiRow ? 'max-w-[600px]' : 'max-w-[500px]';
               break;
             case 'top':
               positionClasses = 'absolute top-2 left-1/2 transform -translate-x-1/2';
-              containerClasses = 'max-w-[400px]';
+              containerClasses = layout.showMultiRow ? 'max-w-[600px]' : 'max-w-[500px]';
               break;
             case 'left':
               positionClasses = 'absolute left-2 top-1/2 transform -translate-y-1/2';
@@ -249,14 +306,17 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   <span>{player.name}</span>
                   <span className="text-gray-600">({playerDiscards.length})</span>
                   <ChevronRight className="w-3 h-3" />
+                  {layout.showMultiRow && (
+                    <span className="text-xs text-blue-600 font-bold">📊</span>
+                  )}
                 </button>
               </div>
               
-              {/* Clean tile container without scroll indicators */}
+              {/* Enhanced responsive tile container */}
               <div className={`${containerClasses} bg-white/5 rounded-lg border border-white/10 p-1`}>
                 {playerDiscards.length > 0 ? (
-                  <div className={`${position === 'left' || position === 'right' ? 'flex flex-col' : 'flex flex-row'} gap-1 flex-wrap justify-center`}>
-                    {playerDiscards.slice(0, 8).map((discard, index) => (
+                  <div className={getGridClasses(playerDiscards.length, position)}>
+                    {playerDiscards.slice(0, layout.maxTiles).map((discard, index) => (
                       <div 
                         key={`${discard.playerId}-${index}`}
                         className="flex-shrink-0 relative group"
@@ -272,9 +332,9 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                         </div>
                       </div>
                     ))}
-                    {playerDiscards.length > 8 && (
+                    {playerDiscards.length > layout.maxTiles && (
                       <div className="flex items-center justify-center text-emerald-300 text-xs p-1 bg-white/10 rounded border border-white/20">
-                        +{playerDiscards.length - 8}
+                        +{playerDiscards.length - layout.maxTiles}
                       </div>
                     )}
                   </div>
@@ -284,6 +344,15 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   </div>
                 )}
               </div>
+              
+              {/* Multi-row indicator for top/bottom players */}
+              {layout.showMultiRow && (position === 'top' || position === 'bottom') && (
+                <div className="text-center mt-1">
+                  <div className="text-xs text-blue-300 bg-blue-500/20 rounded px-2 py-0.5 inline-block">
+                    Multi-row layout
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -301,7 +370,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           </div>
         )}
         <div className="text-emerald-200 text-xs">
-          Click names for detailed grid view
+          📊 = Multi-row • Click names for full grid
         </div>
       </div>
     </div>
