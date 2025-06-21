@@ -190,13 +190,13 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           {playerDiscards.length > 0 ? (
             <div className={gridClasses}>
               {playerDiscards.map((discard, index) => (
-                <div key={`${discard.playerId}-${index}`} className="relative group flex justify-center">
+                <div key={`${discard.playerId}-${index}`} className="relative flex justify-center">
                   <div className={`${tileSize} relative`}>
                     <TileComponent
                       tile={discard.tile}
                       className="w-full h-full opacity-90 hover:opacity-100 transition-opacity duration-200"
                     />
-                    {/* Turn number indicator */}
+                    {/* Turn number indicator - always visible in detailed view */}
                     <div className="absolute -top-1 -right-1 bg-black/70 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
                       {discard.turnNumber}
                     </div>
@@ -319,17 +319,14 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                     {playerDiscards.slice(0, layout.maxTiles).map((discard, index) => (
                       <div 
                         key={`${discard.playerId}-${index}`}
-                        className="flex-shrink-0 relative group"
+                        className="flex-shrink-0 relative"
                       >
                         <TileComponent
                           tile={discard.tile}
                           height="compact"
                           className="opacity-80 hover:opacity-100 transition-opacity duration-200"
                         />
-                        {/* Turn number on hover */}
-                        <div className="absolute -top-1 -right-1 bg-black/70 text-white text-xs rounded-full w-3 h-3 flex items-center justify-center font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                          {discard.turnNumber}
-                        </div>
+                        {/* Removed turn number hover indicator */}
                       </div>
                     ))}
                     {playerDiscards.length > layout.maxTiles && (
