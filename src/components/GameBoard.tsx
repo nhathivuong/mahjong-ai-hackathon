@@ -1102,7 +1102,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         )}
 
-        {/* Other Players */}
+        {/* Other Players with Exposed Sets */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {gameState.players.slice(1).map((player, index) => (
             <div
@@ -1123,7 +1123,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                   {player.hand.length} tiles
                 </span>
               </div>
-              <div className="flex flex-wrap gap-1">
+              
+              {/* Hidden Hand Tiles */}
+              <div className="flex flex-wrap gap-1 mb-3">
                 {Array.from({ length: player.hand.length }, (_, i) => (
                   <div
                     key={i}
@@ -1131,6 +1133,27 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                   />
                 ))}
               </div>
+              
+              {/* Bot's Exposed Sets */}
+              {player.exposedSets.length > 0 && (
+                <div className="mt-3">
+                  <div className="text-emerald-200 text-xs mb-2">Exposed Sets:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {player.exposedSets.map((set, setIndex) => (
+                      <div key={setIndex} className="flex gap-0.5 bg-white/5 rounded-lg p-1 border border-emerald-400/30">
+                        {set.map((tile, tileIndex) => (
+                          <TileComponent
+                            key={tileIndex}
+                            tile={tile}
+                            height="compact"
+                            className="scale-[0.6] border border-emerald-400/50"
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1222,6 +1245,26 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               />
             ))}
           </div>
+
+          {/* Player's Exposed Sets */}
+          {gameState.players[0].exposedSets.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-white font-medium mb-3">Your Exposed Sets:</h4>
+              <div className="flex flex-wrap gap-4">
+                {gameState.players[0].exposedSets.map((set, setIndex) => (
+                  <div key={setIndex} className="flex gap-1 bg-emerald-500/10 rounded-lg p-3 border border-emerald-400/30">
+                    {set.map((tile, tileIndex) => (
+                      <TileComponent
+                        key={tileIndex}
+                        tile={tile}
+                        className="scale-75 border border-emerald-400/50"
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           
           <div className="text-emerald-200 text-sm">
             <p>Tiles in hand: {playerHand.length}</p>
