@@ -1,36 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bot, Users, Monitor, BookOpen, Sparkles } from 'lucide-react';
+import { Bot, BookOpen, Sparkles } from 'lucide-react';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
-
-  const gameOptions = [
-    {
-      id: 'bot',
-      title: 'Play vs Bot',
-      description: 'Challenge our intelligent AI opponent',
-      icon: Bot,
-      gradient: 'from-amber-500 to-orange-600',
-      path: '/game/bot'
-    },
-    {
-      id: 'online',
-      title: 'Online Multiplayer',
-      description: 'Play with friends around the world',
-      icon: Users,
-      gradient: 'from-blue-500 to-cyan-600',
-      path: '/game/online'
-    },
-    {
-      id: 'local',
-      title: 'Local Game',
-      description: 'Play with friends on the same device',
-      icon: Monitor,
-      gradient: 'from-purple-500 to-pink-600',
-      path: '/game/local'
-    }
-  ];
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -50,40 +23,62 @@ const HomePage: React.FC = () => {
           </div>
           <p className="text-xl text-emerald-100 max-w-2xl mx-auto leading-relaxed">
             Experience the classic tile-matching game with beautiful graphics, 
-            intelligent AI, and multiplayer capabilities.
+            intelligent AI, and authentic Chinese Mahjong rules.
           </p>
         </div>
 
-        {/* Game Options */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-          {gameOptions.map((option) => {
-            const IconComponent = option.icon;
-            return (
-              <div
-                key={option.id}
-                onClick={() => navigate(option.path)}
-                className="group cursor-pointer transform transition-all duration-300 hover:scale-105 hover:-translate-y-2"
-              >
-                <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 h-full hover:bg-white/20 transition-all duration-300">
-                  <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${option.gradient} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
-                    <IconComponent className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-3">
-                    {option.title}
-                  </h3>
-                  <p className="text-emerald-100 leading-relaxed">
-                    {option.description}
-                  </p>
-                  <div className="mt-6 flex items-center text-amber-400 font-medium group-hover:text-amber-300 transition-colors">
-                    Start Playing
-                    <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </div>
+        {/* Main Game Option */}
+        <div className="flex justify-center mb-12">
+          <div
+            onClick={() => navigate('/game/bot')}
+            className="group cursor-pointer transform transition-all duration-300 hover:scale-105 hover:-translate-y-2 max-w-md"
+          >
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-12 h-full hover:bg-white/20 transition-all duration-300">
+              <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-300 mx-auto">
+                <Bot className="w-10 h-10 text-white" />
               </div>
-            );
-          })}
+              <h3 className="text-3xl font-bold text-white mb-4 text-center">
+                Play Mahjong
+              </h3>
+              <p className="text-emerald-100 leading-relaxed text-center text-lg">
+                Challenge our intelligent AI opponents in authentic Chinese Mahjong. 
+                Perfect your strategy and master the ancient game!
+              </p>
+              <div className="mt-8 flex items-center justify-center text-amber-400 font-medium group-hover:text-amber-300 transition-colors text-lg">
+                Start Playing
+                <svg className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Game Features */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 text-center">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <Bot className="w-6 h-6 text-white" />
+            </div>
+            <h4 className="text-white font-medium mb-2">Smart AI Opponents</h4>
+            <p className="text-emerald-200 text-sm">Play against 3 intelligent bots with realistic gameplay</p>
+          </div>
+          
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 text-center">
+            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <span className="text-white text-xl font-bold">🀄</span>
+            </div>
+            <h4 className="text-white font-medium mb-2">Authentic Rules</h4>
+            <p className="text-emerald-200 text-sm">Traditional Chinese Mahjong with proper scoring</p>
+          </div>
+          
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 text-center">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="w-6 h-6 text-white" />
+            </div>
+            <h4 className="text-white font-medium mb-2">Beautiful Interface</h4>
+            <p className="text-emerald-200 text-sm">Elegant design with smooth animations and effects</p>
+          </div>
         </div>
 
         {/* Rules Button */}

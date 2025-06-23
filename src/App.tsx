@@ -3,8 +3,6 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './components/HomePage';
 import GamePage from './components/GamePage';
 import RulesPage from './components/RulesPage';
-import OnlineGamePage from './components/OnlineGamePage';
-import LocalGamePage from './components/LocalGamePage';
 
 function App() {
   return (
@@ -13,8 +11,6 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/game/bot" element={<GamePage />} />
-          <Route path="/game/online" element={<OnlineGamePage />} />
-          <Route path="/game/local" element={<LocalGamePage />} />
           <Route path="/rules" element={<RulesPage />} />
         </Routes>
       </div>
