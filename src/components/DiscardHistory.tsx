@@ -68,7 +68,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
     return { cols: bestCols, rows: bestRows };
   };
 
-  // Calculate responsive layout for top/bottom players based on tile count
+  // Calculate responsive layout - now always uses multi-row for top/bottom players
   const getResponsiveLayout = (tileCount: number, position: string) => {
     if (position !== 'top' && position !== 'bottom') {
       // Side players keep single column/row layout
@@ -79,23 +79,13 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
       };
     }
 
-    // Desktop responsive logic for top/bottom players
-    const breakpoints = {
-      mobile: { maxCols: 6, maxRows: 1 },
-      tablet: { maxCols: 8, maxRows: 2 },
-      desktop: { maxCols: 10, maxRows: 2 },
-      large: { maxCols: 12, maxRows: 3 }
-    };
-
-    // Determine if we should show multi-row layout
-    const showMultiRow = tileCount > 8;
-    const maxTiles = showMultiRow ? Math.min(tileCount, 24) : Math.min(tileCount, 12);
+    // Desktop responsive logic for top/bottom players - always multi-row
+    const maxTiles = Math.min(tileCount, 24);
 
     return {
       maxTiles,
       layout: 'grid',
-      showMultiRow,
-      breakpoints
+      showMultiRow: true // Always true now
     };
   };
 
@@ -108,12 +98,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
       return 'flex flex-col gap-1 max-h-[280px] overflow-hidden';
     }
 
-    if (!layout.showMultiRow) {
-      // Single row layout for fewer tiles
-      return 'flex flex-row gap-1 flex-wrap justify-center max-w-[500px]';
-    }
-
-    // Multi-row responsive grid for top/bottom players
+    // Multi-row responsive grid for top/bottom players (always enabled)
     const { cols } = calculateGridDimensions(Math.min(tileCount, layout.maxTiles));
     const gridCols = Math.min(cols, 12);
 
@@ -231,7 +216,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-white font-medium text-lg">Discard History</h3>
         <div className="text-emerald-200 text-sm">
-          Click player names to see detailed view
+          Click names for full grid view
         </div>
       </div>
       
@@ -279,11 +264,11 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           switch (position) {
             case 'bottom':
               positionClasses = 'absolute bottom-2 left-1/2 transform -translate-x-1/2';
-              containerClasses = layout.showMultiRow ? 'max-w-[600px]' : 'max-w-[500px]';
+              containerClasses = 'max-w-[600px]'; // Always use multi-row container
               break;
             case 'top':
               positionClasses = 'absolute top-2 left-1/2 transform -translate-x-1/2';
-              containerClasses = layout.showMultiRow ? 'max-w-[600px]' : 'max-w-[500px]';
+              containerClasses = 'max-w-[600px]'; // Always use multi-row container
               break;
             case 'left':
               positionClasses = 'absolute left-2 top-1/2 transform -translate-y-1/2';
@@ -297,18 +282,14 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
 
           return (
             <div key={player.id} className={positionClasses}>
-              {/* Player label with click to expand */}
+              {/* Player label - simplified without tile count */}
               <div className="text-center mb-1">
                 <button
                   onClick={() => setSelectedPlayer(player.id)}
                   className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-xs font-medium transition-all hover:scale-105 ${getPlayerColor(player.id)} hover:shadow-md`}
                 >
                   <span>{player.name}</span>
-                  <span className="text-gray-600">({playerDiscards.length})</span>
                   <ChevronRight className="w-3 h-3" />
-                  {layout.showMultiRow && (
-                    <span className="text-xs text-blue-600 font-bold">📊</span>
-                  )}
                 </button>
               </div>
               
@@ -326,7 +307,6 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                           height="compact"
                           className="opacity-80 hover:opacity-100 transition-opacity duration-200"
                         />
-                        {/* Removed turn number hover indicator */}
                       </div>
                     ))}
                     {playerDiscards.length > layout.maxTiles && (
@@ -341,15 +321,6 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   </div>
                 )}
               </div>
-              
-              {/* Multi-row indicator for top/bottom players */}
-              {layout.showMultiRow && (position === 'top' || position === 'bottom') && (
-                <div className="text-center mt-1">
-                  <div className="text-xs text-blue-300 bg-blue-500/20 rounded px-2 py-0.5 inline-block">
-                    Multi-row layout
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}
@@ -367,7 +338,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           </div>
         )}
         <div className="text-emerald-200 text-xs">
-          📊 = Multi-row • Click names for full grid
+          Click names for full grid view
         </div>
       </div>
     </div>
