@@ -187,15 +187,6 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
             </div>
           )}
         </div>
-        
-        {/* Grid Info */}
-        {playerDiscards.length > 0 && (
-          <div className="mt-4 text-center">
-            <div className="inline-flex items-center space-x-4 text-sm text-emerald-200">
-              <span>Layout: {calculateGridDimensions(playerDiscards.length).cols} × {calculateGridDimensions(playerDiscards.length).rows}</span>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -241,7 +232,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
 
-        {/* Player Discard Areas - Multi-row Layout by Default */}
+        {/* Player Discard Areas - Clean Layout */}
         {players.map((player) => {
           const position = getPlayerPosition(player.id);
           const playerDiscards = groupedDiscards[player.id] || [];
@@ -271,7 +262,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
 
           return (
             <div key={player.id} className={positionClasses}>
-              {/* Player label - clean without count */}
+              {/* Clean player label */}
               <div className="text-center mb-1">
                 <button
                   onClick={() => setSelectedPlayer(player.id)}
@@ -279,11 +270,10 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                 >
                   <span>{player.name}</span>
                   <ChevronRight className="w-3 h-3" />
-                  <span className="text-xs text-blue-600 font-bold">📊</span>
                 </button>
               </div>
               
-              {/* Multi-row tile container by default */}
+              {/* Tile container */}
               <div className={`${containerClasses} bg-white/5 rounded-lg border border-white/10 p-1`}>
                 {playerDiscards.length > 0 ? (
                   <div className={getGridClasses(playerDiscards.length, position)}>
@@ -311,19 +301,12 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   </div>
                 )}
               </div>
-              
-              {/* Multi-row indicator always shown */}
-              <div className="text-center mt-1">
-                <div className="text-xs text-blue-300 bg-blue-500/20 rounded px-2 py-0.5 inline-block">
-                  {position === 'left' || position === 'right' ? 'Multi-col' : 'Multi-row'}
-                </div>
-              </div>
             </div>
           );
         })}
       </div>
 
-      {/* Simplified Summary - removed total count */}
+      {/* Clean Summary */}
       <div className="mt-4 flex justify-between items-center text-sm">
         <div className="text-emerald-200">
           {mostRecentDiscard && (
@@ -334,7 +317,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           )}
         </div>
         <div className="text-emerald-200 text-xs">
-          📊 = Multi-layout • Click names for full grid
+          Click names for full grid view
         </div>
       </div>
     </div>
