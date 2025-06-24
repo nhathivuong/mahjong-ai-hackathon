@@ -61,6 +61,25 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     initializeGame();
   }, []);
 
+  // Helper function to sort exposed sets for display
+  const sortExposedSet = (set: Tile[]): Tile[] => {
+    // If it's a sequence (chow), sort by value
+    if (set.length === 3 && set[0].type === set[1].type && set[0].type === set[2].type) {
+      const hasValues = set.every(tile => tile.value !== undefined);
+      if (hasValues) {
+        // Check if it's a sequence (consecutive values)
+        const values = set.map(tile => tile.value!).sort((a, b) => a - b);
+        if (values[1] === values[0] + 1 && values[2] === values[1] + 1) {
+          // It's a chow - sort by value
+          return [...set].sort((a, b) => a.value! - b.value!);
+        }
+      }
+    }
+    
+    // For pung, kong, or non-sequences, keep original order
+    return set;
+  };
+
   const logAction = (playerId: string, action: string, tileId?: string) => {
     const logEntry: PlayerActionLog = {
       playerId,
@@ -552,8 +571,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       }
     });
 
-    // Add the claimed set to exposed sets
-    const claimedSet = [...option.tiles, lastDiscard.tile];
+    // Add the claimed set to exposed sets - SORT CHOWS IN ORDER
+    let claimedSet = [...option.tiles, lastDiscard.tile];
+    
+    // Sort the claimed set if it's a chow (sequence)
+    if (option.type === 'chow') {
+      claimedSet = claimedSet.sort((a, b) => a.value! - b.value!);
+    }
+    
     humanPlayer.exposedSets.push(claimedSet);
     
     // Sort remaining hand
@@ -1139,14 +1164,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 ))}
               </div>
               
-              {/* Bot's Exposed Sets */}
+              {/* Bot's Exposed Sets - WITH PROPER ORDERING */}
               {player.exposedSets.length > 0 && (
                 <div className="mt-3">
                   <div className="text-emerald-200 text-xs mb-2">Exposed Sets:</div>
                   <div className="flex flex-wrap gap-1 sm:gap-2">
                     {player.exposedSets.map((set, setIndex) => (
                       <div key={setIndex} className="flex gap-0.5 bg-white/5 rounded-lg p-1 border border-emerald-400/30">
-                        {set.map((tile, tileIndex) => (
+                        {sortExposedSet(set).map((tile, tileIndex) => (
                           <TileComponent
                             key={tileIndex}
                             tile={tile}
@@ -1253,14 +1278,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             ))}
           </div>
 
-          {/* Player's Exposed Sets */}
+          {/* Player's Exposed Sets - WITH PROPER CHOW ORDERING */}
           {gameState.players[0].exposedSets.length > 0 && (
             <div className="mb-4">
               <h4 className="text-white font-medium mb-3 text-sm sm:text-base">Your Exposed Sets:</h4>
               <div className="flex flex-wrap gap-2 sm:gap-4">
                 {gameState.players[0].exposedSets.map((set, setIndex) => (
                   <div key={setIndex} className="flex gap-1 bg-emerald-500/10 rounded-lg p-2 sm:p-3 border border-emerald-400/30">
-                    {set.map((tile, tileIndex) => (
+                    {sortExposedSet(set).map((tile, tileIndex) => (
                       <TileComponent
                         key={tileIndex}
                         tile={tile}
