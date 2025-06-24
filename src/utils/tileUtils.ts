@@ -494,28 +494,6 @@ export const calculateDrawScores = (players: { hand: Tile[], exposedSets: Tile[]
   });
 };
 
-export const canFormSet = (tiles: Tile[]): boolean => {
-  if (tiles.length !== 3) return false;
-  
-  // Check for triplet (3 identical tiles)
-  if (tiles.every(tile => 
-    tile.type === tiles[0].type && 
-    tile.value === tiles[0].value &&
-    tile.dragon === tiles[0].dragon &&
-    tile.wind === tiles[0].wind
-  )) {
-    return true;
-  }
-
-  // Check for sequence (3 consecutive tiles of same type)
-  if (tiles[0].type === 'bamboo' || tiles[0].type === 'character' || tiles[0].type === 'dot') {
-    const values = tiles.map(tile => tile.value!).sort((a, b) => a - b);
-    return values[1] === values[0] + 1 && values[2] === values[1] + 1;
-  }
-
-  return false;
-};
-
 // Calculate hand value for wall exhaustion scoring
 export const calculateHandValue = (hand: Tile[], exposedSets: Tile[][]): number => {
   let score = 0;
