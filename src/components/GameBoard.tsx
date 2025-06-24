@@ -982,17 +982,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               >
                 <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
               </button>
-              <button
-                onClick={() => soundManager.setEnabled(!soundManager.getEnabled())}
-                className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
-                  soundManager.getEnabled() 
-                    ? 'bg-green-500 hover:bg-green-600 text-white' 
-                    : 'bg-gray-500 hover:bg-gray-600 text-white'
-                }`}
-                title={soundManager.getEnabled() ? 'Sound On' : 'Sound Off'}
-              >
-                {soundManager.getEnabled() ? <Volume2 className="w-3 h-3 sm:w-4 sm:h-4" /> : <VolumeX className="w-3 h-3 sm:w-4 sm:h-4" />}
-              </button>
               <div className="bg-white/10 backdrop-blur-sm rounded-lg px-2 sm:px-4 py-1 sm:py-2">
                 <span className="text-white font-medium text-xs sm:text-sm">
                   Wall: {gameState.wall.length}
@@ -1212,7 +1201,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         )}
 
-        {/* Player Hand - Mobile Optimized */}
+        {/* Player Hand - Fixed Tile Width Issue */}
         <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
             <h3 className="text-white font-medium text-base sm:text-lg">
@@ -1251,15 +1240,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             </div>
           </div>
           
-          {/* Hand Tiles - Mobile Responsive Grid */}
-          <div className="grid grid-cols-7 sm:grid-cols-10 md:grid-cols-13 gap-1 sm:gap-2 mb-4 justify-items-center">
+          {/* Hand Tiles - Fixed Layout with Proper Flex Wrap */}
+          <div className="flex flex-wrap gap-1 sm:gap-2 mb-4 justify-center sm:justify-start">
             {playerHand.map((tile, index) => (
               <TileComponent
                 key={tile.id}
                 tile={tile}
                 isSelected={selectedTileIndex === index}
                 onClick={() => handlePlayerTileClick(index)}
-                className="w-full max-w-[40px] sm:max-w-none"
+                className="flex-shrink-0"
               />
             ))}
           </div>
