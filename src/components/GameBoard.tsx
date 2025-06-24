@@ -1,22 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Player, GameState, Tile, DiscardedTile } from '../types/mahjong';
-import { 
-  createTileSet, 
-  shuffleTiles, 
-  isWinningHand, 
-  sortTiles, 
-  canFormChow, 
-  canFormPung, 
-  canFormKong,
-  checkDrawCondition,
-  calculateWinScore,
-  calculateDrawScores,
-  isOneAwayFromWin
-} from '../utils/tileUtils';
+import { createTileSet, shuffleTiles, isWinningHand, sortTiles, canFormChow, canFormPung, canFormKong, checkDrawCondition, calculateWinScore, calculateDrawScores } from '../utils/tileUtils';
 import { SoundManager } from '../utils/soundUtils';
 import TileComponent from './TileComponent';
 import DiscardHistory from './DiscardHistory';
-import { Users, Bot, Trophy, RotateCcw, Volume2, VolumeX, Settings, AlertCircle, Award, TrendingUp } from 'lucide-react';
+import { Users, Bot, Trophy, RotateCcw, Volume2, VolumeX, Settings, AlertCircle, X, Star, Award } from 'lucide-react';
 
 interface GameBoardProps {
   gameMode: 'bot' | 'local' | 'online';
@@ -51,6 +39,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [claimOptions, setClaimOptions] = useState<ClaimOption[]>([]);
   const [showClaimDialog, setShowClaimDialog] = useState(false);
   const [showAudioSettings, setShowAudioSettings] = useState(false);
+  const [showGameResult, setShowGameResult] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showError, setShowError] = useState(false);
   const [isFirstTurn, setIsFirstTurn] = useState(true);
@@ -72,25 +61,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   useEffect(() => {
     initializeGame();
   }, []);
-
-  // Helper function to sort exposed sets for display
-  const sortExposedSet = (set: Tile[]): Tile[] => {
-    // If it's a sequence (chow), sort by value
-    if (set.length === 3 && set[0].type === set[1].type && set[0].type === set[2].type) {
-      const hasValues = set.every(tile => tile.value !== undefined);
-      if (hasValues) {
-        // Check if it's a sequence (consecutive values)
-        const values = set.map(tile => tile.value!).sort((a, b) => a - b);
-        if (values[1] === values[0] + 1 && values[2] === values[1] + 1) {
-          // It's a chow - sort by value
-          return [...set].sort((a, b) => a.value! - b.value!);
-        }
-      }
-    }
-    
-    // For pung, kong, or non-sequences, keep original order
-    return set;
-  };
 
   const logAction = (playerId: string, action: string, tileId?: string) => {
     const logEntry: PlayerActionLog = {
@@ -222,44 +192,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   };
 
-  // Enhanced win checking with proper mahjong rules
-  const canWinWithDiscard = (hand: Tile[], discardedTile: Tile, exposedSets: Tile[][] = []): boolean => {
+  // Check if a hand can win with the discarded tile
+  const canWinWithDiscard = (hand: Tile[], discardedTile: Tile): boolean => {
     const testHand = [...hand, discardedTile];
-    return isWinningHand(testHand, exposedSets);
+    return isWinningHand(testHand);
   };
 
   // Check if current hand is winning (for self-drawn wins)
-  const checkWinningHand = (hand: Tile[], exposedSets: Tile[][] = []): boolean => {
-    return isWinningHand(hand, exposedSets);
-  };
-
-  // Check for draw conditions
-  const checkForDraw = (currentGameState: GameState): boolean => {
-    const drawCondition = checkDrawCondition(currentGameState.wall.length, currentGameState.turnNumber);
-    
-    if (drawCondition) {
-      // Calculate final scores for all players
-      const playerData = currentGameState.players.map(player => ({
-        hand: player.hand,
-        exposedSets: player.exposedSets,
-        isDealer: player.isDealer
-      }));
-      
-      const finalScores = calculateDrawScores(playerData);
-      
-      setGameState(prev => prev ? {
-        ...prev,
-        gamePhase: 'draw',
-        drawReason: drawCondition,
-        finalScores
-      } : null);
-      
-      soundManager.playTransitionSound('round-end');
-      setIsProcessingTurn(false);
-      return true;
-    }
-    
-    return false;
+  const checkWinningHand = (hand: Tile[]): boolean => {
+    return isWinningHand(hand);
   };
 
   const initializeGame = () => {
@@ -323,6 +264,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setIsProcessingTurn(false);
     setClaimOptions([]);
     setShowClaimDialog(false);
+    setShowGameResult(false);
     setIsFirstTurn(true);
     
     // Initialize turn actions for dealer (must discard first)
@@ -363,11 +305,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     return uniqueOptions;
   };
 
-  const checkClaimOptions = useCallback((discardedTile: Tile, playerHand: Tile[], exposedSets: Tile[][] = []): ClaimOption[] => {
+  const checkClaimOptions = useCallback((discardedTile: Tile, playerHand: Tile[]): ClaimOption[] => {
     const options: ClaimOption[] = [];
 
     // Check for Win first (highest priority)
-    if (canWinWithDiscard(playerHand, discardedTile, exposedSets)) {
+    if (canWinWithDiscard(playerHand, discardedTile)) {
       options.push({
         type: 'win',
         tiles: [],
@@ -414,10 +356,29 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   }, []);
 
   const drawTile = useCallback((playerIndex: number) => {
-    if (!gameState || gameState.wall.length === 0 || gameState.gamePhase !== 'playing' || isProcessingTurn) return;
+    if (!gameState || gameState.wall.length === 0 || gameState.gamePhase === 'finished' || gameState.gamePhase === 'draw' || isProcessingTurn) return;
 
     // Check for draw condition before drawing
-    if (checkForDraw(gameState)) return;
+    const drawCondition = checkDrawCondition(gameState.wall.length, gameState.turnNumber);
+    if (drawCondition) {
+      // Calculate final scores
+      const finalScores = calculateDrawScores(gameState.players.map(p => ({
+        hand: p.hand,
+        exposedSets: p.exposedSets,
+        isDealer: p.isDealer
+      })));
+
+      setGameState(prev => prev ? {
+        ...prev,
+        gamePhase: 'draw',
+        drawReason: drawCondition,
+        finalScores
+      } : null);
+      
+      setShowGameResult(true);
+      soundManager.playTransitionSound('round-end');
+      return;
+    }
 
     // Validate action for human player
     if (playerIndex === 0) {
@@ -448,23 +409,21 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       playSound('draw', getPlayerPosition(playerIndex));
     }
 
-    const updatedGameState = {
-      ...gameState,
+    setGameState(prev => prev ? {
+      ...prev,
       players: newPlayers,
       wall: newWall
-    };
-
-    setGameState(updatedGameState);
+    } : null);
 
     // Check for winning condition for bots (self-drawn win)
-    if (playerIndex !== 0 && checkWinningHand(newPlayers[playerIndex].hand, newPlayers[playerIndex].exposedSets)) {
+    if (playerIndex !== 0 && checkWinningHand(newPlayers[playerIndex].hand)) {
       const winScore = calculateWinScore(
-        newPlayers[playerIndex].hand, 
-        newPlayers[playerIndex].exposedSets, 
-        'self-drawn', 
+        newPlayers[playerIndex].hand,
+        newPlayers[playerIndex].exposedSets,
+        'self-drawn',
         newPlayers[playerIndex].isDealer
       );
-      
+
       setGameState(prev => prev ? {
         ...prev,
         gamePhase: 'finished',
@@ -472,13 +431,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         winType: 'self-drawn',
         winScore
       } : null);
+      
+      setShowGameResult(true);
       playSound('win');
       setIsProcessingTurn(false);
     }
-  }, [gameState, isProcessingTurn, validateAction, logAction, playSound, checkForDraw]);
+  }, [gameState, isProcessingTurn, validateAction, logAction, playSound]);
 
   const discardTile = useCallback((playerIndex: number, tileIndex: number, isFromDrawn = false) => {
-    if (!gameState || gameState.gamePhase !== 'playing' || isProcessingTurn) return;
+    if (!gameState || gameState.gamePhase === 'finished' || gameState.gamePhase === 'draw' || isProcessingTurn) return;
 
     // Validate action for human player
     if (playerIndex === 0) {
@@ -551,7 +512,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     // Check human player first (if it's not their own discard)
     if (playerIndex !== 0) {
       const humanPlayerHand = newPlayers[0].hand;
-      const claimOpts = checkClaimOptions(discardedTile, humanPlayerHand, newPlayers[0].exposedSets);
+      const claimOpts = checkClaimOptions(discardedTile, humanPlayerHand);
       
       if (claimOpts.length > 0) {
         setClaimOptions(claimOpts);
@@ -564,15 +525,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     // Check bots for winning condition (they auto-claim wins)
     if (!claimFound) {
       for (let i = 1; i < 4; i++) {
-        if (i !== playerIndex && canWinWithDiscard(newPlayers[i].hand, discardedTile, newPlayers[i].exposedSets)) {
+        if (i !== playerIndex && canWinWithDiscard(newPlayers[i].hand, discardedTile)) {
           // Bot wins by claiming the discarded tile
           const winScore = calculateWinScore(
-            newPlayers[i].hand, 
-            newPlayers[i].exposedSets, 
-            'claimed', 
+            [...newPlayers[i].hand, discardedTile],
+            newPlayers[i].exposedSets,
+            'claimed',
             newPlayers[i].isDealer
           );
-          
+
           setGameState(prev => prev ? {
             ...prev,
             gamePhase: 'finished',
@@ -580,6 +541,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             winType: 'claimed',
             winScore
           } : null);
+          
+          setShowGameResult(true);
           playSound('win');
           setIsProcessingTurn(false);
           claimFound = true;
@@ -597,9 +560,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   }, [gameState, drawnTile, isProcessingTurn, checkClaimOptions, validateAction, logAction, playSound]);
 
   const continueToNextTurn = useCallback((currentGameState: GameState) => {
-    // Check for draw condition
-    if (checkForDraw(currentGameState)) return;
-    
     setIsProcessingTurn(false);
     
     if (currentGameState.gamePhase === 'playing' && currentGameState.currentPlayer !== 0) {
@@ -620,12 +580,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     // Handle win claim
     if (option.type === 'win') {
       const winScore = calculateWinScore(
-        humanPlayer.hand, 
-        humanPlayer.exposedSets, 
-        'claimed', 
+        [...humanPlayer.hand, lastDiscard.tile],
+        humanPlayer.exposedSets,
+        'claimed',
         humanPlayer.isDealer
       );
-      
+
       setGameState(prev => prev ? {
         ...prev,
         gamePhase: 'finished',
@@ -633,6 +593,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         winType: 'claimed',
         winScore
       } : null);
+      
+      setShowGameResult(true);
       playSound('win');
       setShowClaimDialog(false);
       setClaimOptions([]);
@@ -647,14 +609,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       }
     });
 
-    // Add the claimed set to exposed sets - SORT CHOWS IN ORDER
+    // Add the claimed set to exposed sets (sorted for chow)
     let claimedSet = [...option.tiles, lastDiscard.tile];
-    
-    // Sort the claimed set if it's a chow (sequence)
     if (option.type === 'chow') {
-      claimedSet = claimedSet.sort((a, b) => a.value! - b.value!);
+      // Sort chow tiles in ascending order for better display
+      claimedSet = claimedSet.sort((a, b) => (a.value || 0) - (b.value || 0));
     }
-    
     humanPlayer.exposedSets.push(claimedSet);
     
     // Sort remaining hand
@@ -680,14 +640,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     playSound('claim', 'center');
 
     // Check for winning condition after claiming
-    if (checkWinningHand(humanPlayer.hand, humanPlayer.exposedSets)) {
+    if (checkWinningHand([...humanPlayer.hand, ...humanPlayer.exposedSets.flat()])) {
       const winScore = calculateWinScore(
-        humanPlayer.hand, 
-        humanPlayer.exposedSets, 
-        'self-drawn', 
+        [...humanPlayer.hand, ...humanPlayer.exposedSets.flat()],
+        humanPlayer.exposedSets,
+        'self-drawn',
         humanPlayer.isDealer
       );
-      
+
       setGameState(prev => prev ? {
         ...prev,
         gamePhase: 'finished',
@@ -695,6 +655,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         winType: 'self-drawn',
         winScore
       } : null);
+      
+      setShowGameResult(true);
       playSound('win');
     }
   }, [gameState, showClaimDialog, logAction, playSound]);
@@ -709,13 +671,35 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   }, [gameState, continueToNextTurn]);
 
   const botTurn = useCallback((botIndex: number, currentGameState: GameState) => {
-    if (currentGameState.gamePhase !== 'playing' || isProcessingTurn) return;
+    if (currentGameState.gamePhase === 'finished' || currentGameState.gamePhase === 'draw' || isProcessingTurn) return;
 
     setIsProcessingTurn(true);
 
     // Bot draws a tile
     setTimeout(() => {
       if (currentGameState.wall.length > 0) {
+        // Check for draw condition
+        const drawCondition = checkDrawCondition(currentGameState.wall.length, currentGameState.turnNumber);
+        if (drawCondition) {
+          const finalScores = calculateDrawScores(currentGameState.players.map(p => ({
+            hand: p.hand,
+            exposedSets: p.exposedSets,
+            isDealer: p.isDealer
+          })));
+
+          setGameState(prev => prev ? {
+            ...prev,
+            gamePhase: 'draw',
+            drawReason: drawCondition,
+            finalScores
+          } : null);
+          
+          setShowGameResult(true);
+          soundManager.playTransitionSound('round-end');
+          setIsProcessingTurn(false);
+          return;
+        }
+
         const newWall = [...currentGameState.wall];
         const drawnTileFromWall = newWall.pop()!;
         
@@ -733,14 +717,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         playSound('draw', getPlayerPosition(botIndex));
 
         // Check for winning condition (self-drawn)
-        if (checkWinningHand(newPlayers[botIndex].hand, newPlayers[botIndex].exposedSets)) {
+        if (checkWinningHand(newPlayers[botIndex].hand)) {
           const winScore = calculateWinScore(
-            newPlayers[botIndex].hand, 
-            newPlayers[botIndex].exposedSets, 
-            'self-drawn', 
+            newPlayers[botIndex].hand,
+            newPlayers[botIndex].exposedSets,
+            'self-drawn',
             newPlayers[botIndex].isDealer
           );
-          
+
           setGameState(prev => prev ? {
             ...prev,
             gamePhase: 'finished',
@@ -748,44 +732,18 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             winType: 'self-drawn',
             winScore
           } : null);
+          
+          setShowGameResult(true);
           playSound('win');
           setIsProcessingTurn(false);
           return;
         }
 
-        // Bot discards a tile after a delay (with basic AI)
+        // Bot discards a random tile after a delay
         setTimeout(() => {
           if (updatedGameState.gamePhase === 'playing' && newPlayers[botIndex].hand.length > 0) {
-            // Simple AI: prefer discarding tiles that don't help form sets
-            const hand = newPlayers[botIndex].hand;
-            const winningTiles = isOneAwayFromWin(hand, newPlayers[botIndex].exposedSets);
-            
-            let discardIndex = 0;
-            
-            // If close to winning, be more careful about discarding
-            if (winningTiles.length > 0) {
-              // Find a tile that's least likely to be useful
-              const tileCounts = new Map<string, number>();
-              hand.forEach(tile => {
-                const key = `${tile.type}-${tile.value || tile.dragon || tile.wind}`;
-                tileCounts.set(key, (tileCounts.get(key) || 0) + 1);
-              });
-              
-              // Prefer discarding isolated tiles (no pairs or sequences)
-              for (let i = 0; i < hand.length; i++) {
-                const tile = hand[i];
-                const key = `${tile.type}-${tile.value || tile.dragon || tile.wind}`;
-                if (tileCounts.get(key) === 1) {
-                  discardIndex = i;
-                  break;
-                }
-              }
-            } else {
-              // Random discard if not close to winning
-              discardIndex = Math.floor(Math.random() * hand.length);
-            }
-            
-            const discardedTile = newPlayers[botIndex].hand.splice(discardIndex, 1)[0];
+            const randomIndex = Math.floor(Math.random() * newPlayers[botIndex].hand.length);
+            const discardedTile = newPlayers[botIndex].hand.splice(randomIndex, 1)[0];
             
             logAction(newPlayers[botIndex].id, 'discard', discardedTile.id);
             playSound('discard', getPlayerPosition(botIndex));
@@ -818,7 +776,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               resetTurnActions(); // Reset for human player's turn
               
               const humanPlayerHand = newPlayers[0].hand;
-              const claimOpts = checkClaimOptions(discardedTile, humanPlayerHand, newPlayers[0].exposedSets);
+              const claimOpts = checkClaimOptions(discardedTile, humanPlayerHand);
               
               if (claimOpts.length > 0) {
                 setClaimOptions(claimOpts);
@@ -829,15 +787,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             } else {
               // Check if other bots can win with this discard
               for (let i = 1; i < 4; i++) {
-                if (i !== botIndex && i !== nextPlayer && canWinWithDiscard(newPlayers[i].hand, discardedTile, newPlayers[i].exposedSets)) {
+                if (i !== botIndex && i !== nextPlayer && canWinWithDiscard(newPlayers[i].hand, discardedTile)) {
                   // Bot wins by claiming the discarded tile
                   const winScore = calculateWinScore(
-                    newPlayers[i].hand, 
-                    newPlayers[i].exposedSets, 
-                    'claimed', 
+                    [...newPlayers[i].hand, discardedTile],
+                    newPlayers[i].exposedSets,
+                    'claimed',
                     newPlayers[i].isDealer
                   );
-                  
+
                   setGameState(prev => prev ? {
                     ...prev,
                     gamePhase: 'finished',
@@ -845,6 +803,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                     winType: 'claimed',
                     winScore
                   } : null);
+                  
+                  setShowGameResult(true);
                   playSound('win');
                   setIsProcessingTurn(false);
                   return;
@@ -867,14 +827,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           }
         }, 1000);
       } else {
-        // Check for draw if wall is empty
-        checkForDraw(currentGameState);
+        setIsProcessingTurn(false);
       }
     }, 500);
-  }, [isProcessingTurn, checkClaimOptions, logAction, playSound, checkForDraw]);
+  }, [isProcessingTurn, checkClaimOptions, logAction, playSound]);
 
   const handlePlayerTileClick = (tileIndex: number) => {
-    if (gameState?.gamePhase !== 'playing' || isProcessingTurn || gameState?.currentPlayer !== 0) {
+    if (gameState?.gamePhase === 'finished' || gameState?.gamePhase === 'draw' || isProcessingTurn || gameState?.currentPlayer !== 0) {
       return;
     }
     
@@ -895,7 +854,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   };
 
   const handleDrawnTileClick = () => {
-    if (gameState?.gamePhase !== 'playing' || !drawnTile || isProcessingTurn || gameState?.currentPlayer !== 0) return;
+    if (gameState?.gamePhase === 'finished' || gameState?.gamePhase === 'draw' || !drawnTile || isProcessingTurn || gameState?.currentPlayer !== 0) return;
     setSelectedTileIndex(null);
   };
 
@@ -948,7 +907,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   };
 
   const handleKeepDrawnTile = () => {
-    if (!drawnTile || gameState?.gamePhase !== 'playing' || isProcessingTurn || gameState?.currentPlayer !== 0) return;
+    if (!drawnTile || gameState?.gamePhase === 'finished' || gameState?.gamePhase === 'draw' || isProcessingTurn || gameState?.currentPlayer !== 0) return;
 
     // Add drawn tile to hand and sort
     const newPlayers = [...gameState!.players];
@@ -964,14 +923,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     logAction('player1', 'keep-drawn', drawnTile.id);
 
     // Check for winning condition (self-drawn win)
-    if (checkWinningHand(newPlayers[0].hand, newPlayers[0].exposedSets)) {
+    if (checkWinningHand(newPlayers[0].hand)) {
       const winScore = calculateWinScore(
-        newPlayers[0].hand, 
-        newPlayers[0].exposedSets, 
-        'self-drawn', 
+        newPlayers[0].hand,
+        newPlayers[0].exposedSets,
+        'self-drawn',
         newPlayers[0].isDealer
       );
-      
+
       setGameState(prev => prev ? {
         ...prev,
         gamePhase: 'finished',
@@ -979,6 +938,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         winType: 'self-drawn',
         winScore
       } : null);
+      
+      setShowGameResult(true);
       playSound('win');
     }
   };
@@ -989,14 +950,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     
     const playerHand = drawnTile ? [...gameState.players[0].hand, drawnTile] : gameState.players[0].hand;
     
-    if (checkWinningHand(playerHand, gameState.players[0].exposedSets)) {
+    if (checkWinningHand(playerHand)) {
       const winScore = calculateWinScore(
-        playerHand, 
-        gameState.players[0].exposedSets, 
-        drawnTile ? 'self-drawn' : 'claimed', 
+        playerHand,
+        gameState.players[0].exposedSets,
+        drawnTile ? 'self-drawn' : 'claimed',
         gameState.players[0].isDealer
       );
-      
+
       setGameState(prev => prev ? {
         ...prev,
         gamePhase: 'finished',
@@ -1004,10 +965,16 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         winType: drawnTile ? 'self-drawn' : 'claimed',
         winScore
       } : null);
+      
+      setShowGameResult(true);
       playSound('win');
     } else {
       showErrorMessage("Your hand is not a winning hand yet.");
     }
+  };
+
+  const handleCloseGameResult = () => {
+    setShowGameResult(false);
   };
 
   if (!gameState) {
@@ -1024,7 +991,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   // Check if player can declare win
   const canDeclareWin = isPlayerTurn && gameState.gamePhase === 'playing' && 
-    checkWinningHand(drawnTile ? [...playerHand, drawnTile] : playerHand, gameState.players[0].exposedSets);
+    checkWinningHand(drawnTile ? [...playerHand, drawnTile] : playerHand);
 
   // Filter out claimed tiles from discard pile for display
   const getActiveDiscards = () => {
@@ -1054,6 +1021,99 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             <div className="bg-red-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-lg flex items-center space-x-2 max-w-[90vw]">
               <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
               <span className="text-sm sm:text-base truncate">{errorMessage}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Game Result Popup */}
+        {showGameResult && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl">
+              <div className="text-center">
+                {gameState.gamePhase === 'finished' ? (
+                  <>
+                    {/* Win Result */}
+                    <div className="mb-6">
+                      <Trophy className="w-16 h-16 text-amber-500 mx-auto mb-4" />
+                      <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">
+                        {gameState.winner === 'player1' ? 'You Win!' : 'Game Over'}
+                      </h2>
+                      <p className="text-lg text-gray-600 mb-4">
+                        {gameState.players.find(p => p.id === gameState.winner)?.name} wins with Mahjong!
+                      </p>
+                      
+                      {/* Win Details */}
+                      <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                        <div className="flex items-center justify-center space-x-2 mb-2">
+                          <Star className="w-5 h-5 text-amber-500" />
+                          <span className="font-medium text-gray-700">
+                            {gameState.winType === 'self-drawn' ? 'Self-Drawn Win' : 'Claimed Win'}
+                          </span>
+                        </div>
+                        {gameState.winScore && (
+                          <div className="flex items-center justify-center space-x-2">
+                            <Award className="w-4 h-4 text-green-500" />
+                            <span className="text-sm text-gray-600">
+                              Score: {gameState.winScore} points
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )
+                ) : (
+                  <>
+                    {/* Draw Result */}
+                    <div className="mb-6">
+                      <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span className="text-2xl">🤝</span>
+                      </div>
+                      <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">
+                        Game Draw
+                      </h2>
+                      <p className="text-lg text-gray-600 mb-4">
+                        {gameState.drawReason === 'wall-exhausted' 
+                          ? 'Wall exhausted - no more tiles to draw'
+                          : 'Game ended due to too many turns'
+                        }
+                      </p>
+                      
+                      {/* Final Scores */}
+                      {gameState.finalScores && (
+                        <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                          <h3 className="font-medium text-gray-700 mb-3">Final Scores</h3>
+                          <div className="space-y-2">
+                            {gameState.players.map((player, index) => (
+                              <div key={player.id} className="flex justify-between items-center">
+                                <span className="text-sm text-gray-600">{player.name}</span>
+                                <span className="font-medium text-gray-800">
+                                  {gameState.finalScores![index]} pts
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )
+                )}
+                
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={initializeGame}
+                    className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:scale-105 shadow-lg"
+                  >
+                    New Game
+                  </button>
+                  <button
+                    onClick={handleCloseGameResult}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1150,6 +1210,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             
             {/* Controls Row */}
             <div className="flex items-center gap-1 sm:gap-2">
+              <button
+                onClick={() => setShowAudioSettings(true)}
+                className="p-1.5 sm:p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 transition-colors"
+                title="Audio Settings"
+              >
+                <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
+              </button>
               <div className="bg-white/10 backdrop-blur-sm rounded-lg px-2 sm:px-4 py-1 sm:py-2">
                 <span className="text-white font-medium text-xs sm:text-sm">
                   Wall: {gameState.wall.length}
@@ -1168,7 +1235,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
 
           {/* Player Turn Status - Mobile Optimized */}
-          {isPlayerTurn && gameState.gamePhase === 'playing' && (
+          {isPlayerTurn && (
             <div className="bg-blue-500/20 backdrop-blur-sm rounded-lg px-3 py-2 border border-blue-400 mt-2">
               <div className="text-blue-200 font-medium text-xs sm:text-sm">
                 {isFirstTurn ? (
@@ -1258,64 +1325,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         )}
 
-        {/* Game Winner */}
-        {gameState.gamePhase === 'finished' && (
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 text-center">
-            <Trophy className="w-8 h-8 sm:w-12 sm:h-12 text-white mx-auto mb-4" />
-            <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">Game Over!</h2>
-            <p className="text-white text-base sm:text-lg mb-2">
-              {gameState.players.find(p => p.id === gameState.winner)?.name} wins with Mahjong!
-            </p>
-            {gameState.winScore && (
-              <div className="flex items-center justify-center space-x-2 mb-4">
-                <Award className="w-5 h-5 text-yellow-300" />
-                <span className="text-yellow-300 font-bold">
-                  Score: {gameState.winScore} points ({gameState.winType === 'self-drawn' ? 'Self-drawn' : 'Claimed'})
-                </span>
-              </div>
-            )}
-            <button
-              onClick={initializeGame}
-              className="mt-4 bg-white/20 hover:bg-white/30 text-white px-4 sm:px-6 py-2 rounded-lg transition-colors"
-            >
-              Play Again
-            </button>
-          </div>
-        )}
-
-        {/* Game Draw */}
-        {gameState.gamePhase === 'draw' && (
-          <div className="bg-gradient-to-r from-gray-600 to-gray-700 rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 text-center">
-            <TrendingUp className="w-8 h-8 sm:w-12 sm:h-12 text-white mx-auto mb-4" />
-            <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">Game Draw!</h2>
-            <p className="text-white text-base sm:text-lg mb-4">
-              {gameState.drawReason === 'wall-exhausted' ? 'Wall exhausted - no more tiles to draw' : 'Game took too long'}
-            </p>
-            
-            {/* Final Scores */}
-            {gameState.finalScores && (
-              <div className="bg-white/10 rounded-lg p-4 mb-4">
-                <h3 className="text-white font-bold mb-3">Final Scores:</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {gameState.players.map((player, index) => (
-                    <div key={player.id} className="flex justify-between items-center text-white">
-                      <span className="truncate">{player.name}:</span>
-                      <span className="font-bold ml-2">{gameState.finalScores![index]}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            <button
-              onClick={initializeGame}
-              className="bg-white/20 hover:bg-white/30 text-white px-4 sm:px-6 py-2 rounded-lg transition-colors"
-            >
-              Play Again
-            </button>
-          </div>
-        )}
-
         {/* Other Players with Exposed Sets - Mobile Optimized */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
           {gameState.players.slice(1).map((player, index) => (
@@ -1348,14 +1357,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 ))}
               </div>
               
-              {/* Bot's Exposed Sets - WITH PROPER ORDERING */}
+              {/* Bot's Exposed Sets */}
               {player.exposedSets.length > 0 && (
                 <div className="mt-3">
                   <div className="text-emerald-200 text-xs mb-2">Exposed Sets:</div>
                   <div className="flex flex-wrap gap-1 sm:gap-2">
                     {player.exposedSets.map((set, setIndex) => (
                       <div key={setIndex} className="flex gap-0.5 bg-white/5 rounded-lg p-1 border border-emerald-400/30">
-                        {sortExposedSet(set).map((tile, tileIndex) => (
+                        {set.map((tile, tileIndex) => (
                           <TileComponent
                             key={tileIndex}
                             tile={tile}
@@ -1415,7 +1424,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
             <h3 className="text-white font-medium text-base sm:text-lg">
               Your Hand
-              {isPlayerTurn && gameState.gamePhase === 'playing' && (
+              {isPlayerTurn && (
                 <span className="ml-2 text-amber-300 text-sm">● Your Turn</span>
               )}
             </h3>
@@ -1462,14 +1471,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             ))}
           </div>
 
-          {/* Player's Exposed Sets - WITH PROPER CHOW ORDERING */}
+          {/* Player's Exposed Sets */}
           {gameState.players[0].exposedSets.length > 0 && (
             <div className="mb-4">
               <h4 className="text-white font-medium mb-3 text-sm sm:text-base">Your Exposed Sets:</h4>
               <div className="flex flex-wrap gap-2 sm:gap-4">
                 {gameState.players[0].exposedSets.map((set, setIndex) => (
                   <div key={setIndex} className="flex gap-1 bg-emerald-500/10 rounded-lg p-2 sm:p-3 border border-emerald-400/30">
-                    {sortExposedSet(set).map((tile, tileIndex) => (
+                    {set.map((tile, tileIndex) => (
                       <TileComponent
                         key={tileIndex}
                         tile={tile}
@@ -1516,11 +1525,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             {!isPlayerTurn && gameState.gamePhase === 'playing' && (
               <p className="text-gray-300 font-medium">Wait for your turn...</p>
             )}
-            {gameState.gamePhase === 'finished' && (
+            {(gameState.gamePhase === 'finished' || gameState.gamePhase === 'draw') && (
               <p className="text-amber-300 font-medium">Game finished! Start a new game to continue playing.</p>
-            )}
-            {gameState.gamePhase === 'draw' && (
-              <p className="text-gray-300 font-medium">Game ended in a draw. Start a new game to continue playing.</p>
             )}
           </div>
         </div>
