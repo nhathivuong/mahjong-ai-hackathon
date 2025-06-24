@@ -203,7 +203,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
       {/* Multi-row layout by default for ALL positions */}
       <div className="relative w-full h-[32rem] bg-emerald-800/30 rounded-xl border border-emerald-600/30 overflow-hidden">
         
-        {/* Center - Most Recent Discard - Center Aligned */}
+        {/* Center - Most Recent Discard - Clean Center Display */}
         <div className="absolute top-[45%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
           {mostRecentDiscard ? (
             <div className="flex flex-col items-center text-center">
@@ -213,12 +213,9 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                   className="scale-110 shadow-xl border-2 border-amber-400"
                 />
               </div>
-              <div className="bg-black/70 rounded-lg px-4 py-2 flex flex-col items-center">
-                <p className="text-white text-sm font-medium mb-1">
+              <div className="bg-black/70 rounded-lg px-4 py-2">
+                <p className="text-white text-sm font-medium">
                   {mostRecentDiscard.playerName}
-                </p>
-                <p className="text-emerald-200 text-xs">
-                  Latest
                 </p>
               </div>
             </div>
