@@ -871,23 +871,23 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const activeDiscards = getActiveDiscards();
 
   return (
-    <div className="min-h-screen p-4">
+    <div className="min-h-screen p-2 sm:p-4">
       <div className="max-w-7xl mx-auto">
         {/* Error Message */}
         {showError && (
           <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
-            <div className="bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2">
-              <AlertCircle className="w-5 h-5" />
-              <span>{errorMessage}</span>
+            <div className="bg-red-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-lg flex items-center space-x-2 max-w-[90vw]">
+              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+              <span className="text-sm sm:text-base truncate">{errorMessage}</span>
             </div>
           </div>
         )}
 
         {/* Audio Settings Modal */}
         {showAudioSettings && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">Audio Settings</h3>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-4 sm:p-6 max-w-md w-full">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-4">Audio Settings</h3>
               
               <div className="space-y-4">
                 <div>
@@ -952,85 +952,101 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         )}
 
-        {/* Game Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
-              <span className="text-white font-medium">Round {gameState.round}</span>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
-              <span className="text-white font-medium">
-                Turn {gameState.turnNumber}
-              </span>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
-              <span className="text-white font-medium">
-                Current: {currentPlayer.name}
-                {isProcessingTurn && <span className="ml-2 text-amber-300">⏳</span>}
-              </span>
-            </div>
-            {isPlayerTurn && (
-              <div className="bg-blue-500/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-blue-400">
-                <span className="text-blue-200 font-medium">
-                  {isFirstTurn ? 'Dealer - Must Discard First' : 
-                   `Draw: ${turnActions.hasDrawn ? '✓' : turnActions.canDraw ? '○' : '✗'} | 
-                    Discard: ${turnActions.hasDiscarded ? '✓' : turnActions.canDiscard ? '○' : '✗'}`}
+        {/* Mobile-Optimized Game Header */}
+        <div className="mb-4 sm:mb-6">
+          {/* Top Row - Game Info */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 sm:mb-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-2 sm:px-4 py-1 sm:py-2">
+                <span className="text-white font-medium text-xs sm:text-sm">Round {gameState.round}</span>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-2 sm:px-4 py-1 sm:py-2">
+                <span className="text-white font-medium text-xs sm:text-sm">
+                  Turn {gameState.turnNumber}
                 </span>
               </div>
-            )}
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowAudioSettings(true)}
-              className="p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 transition-colors"
-              title="Audio Settings"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => soundManager.setEnabled(!soundManager.getEnabled())}
-              className={`p-2 rounded-lg transition-colors ${
-                soundManager.getEnabled() 
-                  ? 'bg-green-500 hover:bg-green-600 text-white' 
-                  : 'bg-gray-500 hover:bg-gray-600 text-white'
-              }`}
-              title={soundManager.getEnabled() ? 'Sound On' : 'Sound Off'}
-            >
-              {soundManager.getEnabled() ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </button>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
-              <span className="text-white font-medium">
-                Wall: {gameState.wall.length} tiles
-              </span>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-2 sm:px-4 py-1 sm:py-2">
+                <span className="text-white font-medium text-xs sm:text-sm">
+                  <span className="hidden sm:inline">Current: </span>{currentPlayer.name}
+                  {isProcessingTurn && <span className="ml-1 sm:ml-2 text-amber-300">⏳</span>}
+                </span>
+              </div>
             </div>
-            <button
-              onClick={initializeGame}
-              disabled={isProcessingTurn}
-              className="bg-amber-500 hover:bg-amber-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>New Game</span>
-            </button>
+            
+            {/* Controls Row */}
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button
+                onClick={() => setShowAudioSettings(true)}
+                className="p-1.5 sm:p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 transition-colors"
+                title="Audio Settings"
+              >
+                <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
+              </button>
+              <button
+                onClick={() => soundManager.setEnabled(!soundManager.getEnabled())}
+                className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
+                  soundManager.getEnabled() 
+                    ? 'bg-green-500 hover:bg-green-600 text-white' 
+                    : 'bg-gray-500 hover:bg-gray-600 text-white'
+                }`}
+                title={soundManager.getEnabled() ? 'Sound On' : 'Sound Off'}
+              >
+                {soundManager.getEnabled() ? <Volume2 className="w-3 h-3 sm:w-4 sm:h-4" /> : <VolumeX className="w-3 h-3 sm:w-4 sm:h-4" />}
+              </button>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-2 sm:px-4 py-1 sm:py-2">
+                <span className="text-white font-medium text-xs sm:text-sm">
+                  Wall: {gameState.wall.length}
+                </span>
+              </div>
+              <button
+                onClick={initializeGame}
+                disabled={isProcessingTurn}
+                className="bg-amber-500 hover:bg-amber-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 transition-colors text-xs sm:text-sm"
+              >
+                <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">New Game</span>
+                <span className="sm:hidden">New</span>
+              </button>
+            </div>
           </div>
+
+          {/* Player Turn Status - Mobile Optimized */}
+          {isPlayerTurn && (
+            <div className="bg-blue-500/20 backdrop-blur-sm rounded-lg px-3 py-2 border border-blue-400 mt-2">
+              <div className="text-blue-200 font-medium text-xs sm:text-sm">
+                {isFirstTurn ? (
+                  <span>🎯 Dealer - Must Discard First</span>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                    <span className="flex items-center gap-1">
+                      Draw: {turnActions.hasDrawn ? '✓' : turnActions.canDraw ? '○' : '✗'}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      Discard: {turnActions.hasDiscarded ? '✓' : turnActions.canDiscard ? '○' : '✗'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Enhanced Claim Dialog - Now includes Win option */}
+        {/* Enhanced Claim Dialog - Mobile Optimized */}
         {showClaimDialog && (
-          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-40">
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-gray-200 max-w-2xl">
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-40 w-[95vw] max-w-2xl">
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-gray-200">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-bold text-gray-800">
+                <h3 className="text-base sm:text-lg font-bold text-gray-800">
                   {claimOptions.some(opt => opt.type === 'win') ? 'Winning Opportunity!' : 'Claim Discarded Tile?'}
                 </h3>
-                <div className="text-sm text-gray-600">Choose an action or skip</div>
+                <div className="text-xs sm:text-sm text-gray-600">Choose an action or skip</div>
               </div>
               
-              {/* Tiles Preview */}
-              <div className="flex items-center justify-center space-x-2 mb-4 p-3 bg-gray-50 rounded-lg">
+              {/* Tiles Preview - Mobile Optimized */}
+              <div className="flex items-center justify-center space-x-1 sm:space-x-2 mb-4 p-2 sm:p-3 bg-gray-50 rounded-lg overflow-x-auto">
                 {claimOptions.length > 0 && claimOptions[0].type !== 'win' && (
                   <>
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-1 flex-shrink-0">
                       <span className="text-xs text-gray-600 font-medium">Your tiles:</span>
                       {claimOptions[0].tiles.map((tile, tileIndex) => (
                         <TileComponent
@@ -1044,7 +1060,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                     <span className="text-gray-400 font-bold">+</span>
                   </>
                 )}
-                <div className="flex items-center space-x-1">
+                <div className="flex items-center space-x-1 flex-shrink-0">
                   <span className="text-xs text-gray-600 font-medium">
                     {claimOptions.some(opt => opt.type === 'win') ? 'Winning tile:' : 'Claimed:'}
                   </span>
@@ -1056,13 +1072,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 </div>
               </div>
               
-              {/* Action Buttons - Horizontal Layout */}
-              <div className="flex items-center justify-center space-x-3">
+              {/* Action Buttons - Mobile Responsive */}
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
                 {claimOptions.map((option, index) => (
                   <button
                     key={index}
                     onClick={() => handleClaim(option)}
-                    className={`px-6 py-3 text-white rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 text-white rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg text-sm sm:text-base ${
                       option.type === 'win' ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 animate-pulse' :
                       option.type === 'chow' ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700' :
                       option.type === 'pung' ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' :
@@ -1076,7 +1092,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 {/* Skip Button */}
                 <button
                   onClick={handleSkipClaim}
-                  className="px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg"
+                  className="px-3 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg text-sm sm:text-base"
                 >
                   Skip
                 </button>
@@ -1087,49 +1103,49 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
         {/* Game Winner */}
         {gameState.gamePhase === 'finished' && (
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-6 mb-6 text-center">
-            <Trophy className="w-12 h-12 text-white mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white mb-2">Game Over!</h2>
-            <p className="text-white text-lg">
+          <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 text-center">
+            <Trophy className="w-8 h-8 sm:w-12 sm:h-12 text-white mx-auto mb-4" />
+            <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">Game Over!</h2>
+            <p className="text-white text-base sm:text-lg">
               {gameState.players.find(p => p.id === gameState.winner)?.name} wins with Mahjong!
             </p>
             <button
               onClick={initializeGame}
-              className="mt-4 bg-white/20 hover:bg-white/30 text-white px-6 py-2 rounded-lg transition-colors"
+              className="mt-4 bg-white/20 hover:bg-white/30 text-white px-4 sm:px-6 py-2 rounded-lg transition-colors"
             >
               Play Again
             </button>
           </div>
         )}
 
-        {/* Other Players with Exposed Sets */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        {/* Other Players with Exposed Sets - Mobile Optimized */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
           {gameState.players.slice(1).map((player, index) => (
             <div
               key={player.id}
-              className={`bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4 ${
+              className={`bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-3 sm:p-4 ${
                 gameState.currentPlayer === index + 1 ? 'ring-2 ring-amber-400' : ''
               }`}
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">
-                  <Bot className="w-4 h-4 text-amber-400" />
-                  <span className="text-white font-medium">{player.name}</span>
+                  <Bot className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400" />
+                  <span className="text-white font-medium text-sm sm:text-base truncate">{player.name}</span>
                   {gameState.currentPlayer === index + 1 && (
                     <span className="text-amber-300 text-xs">●</span>
                   )}
                 </div>
-                <span className="text-emerald-200 text-sm">
+                <span className="text-emerald-200 text-xs sm:text-sm">
                   {player.hand.length} tiles
                 </span>
               </div>
               
               {/* Hidden Hand Tiles */}
               <div className="flex flex-wrap gap-1 mb-3">
-                {Array.from({ length: player.hand.length }, (_, i) => (
+                {Array.from({ length: Math.min(player.hand.length, 14) }, (_, i) => (
                   <div
                     key={i}
-                    className="w-6 h-8 bg-gradient-to-b from-red-800 to-red-900 rounded-sm border border-red-700"
+                    className="w-4 h-6 sm:w-6 sm:h-8 bg-gradient-to-b from-red-800 to-red-900 rounded-sm border border-red-700"
                   />
                 ))}
               </div>
@@ -1138,7 +1154,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               {player.exposedSets.length > 0 && (
                 <div className="mt-3">
                   <div className="text-emerald-200 text-xs mb-2">Exposed Sets:</div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1 sm:gap-2">
                     {player.exposedSets.map((set, setIndex) => (
                       <div key={setIndex} className="flex gap-0.5 bg-white/5 rounded-lg p-1 border border-emerald-400/30">
                         {set.map((tile, tileIndex) => (
@@ -1146,7 +1162,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                             key={tileIndex}
                             tile={tile}
                             height="compact"
-                            className="scale-[0.6] border border-emerald-400/50"
+                            className="scale-[0.5] sm:scale-[0.6] border border-emerald-400/50"
                           />
                         ))}
                       </div>
@@ -1159,35 +1175,35 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         </div>
 
         {/* Discard History */}
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <DiscardHistory 
             discardPile={activeDiscards} 
             players={gameState.players.map(p => ({ id: p.id, name: p.name }))}
           />
         </div>
 
-        {/* Drawn Tile Section */}
+        {/* Drawn Tile Section - Mobile Optimized */}
         {drawnTile && (
-          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4 mb-6">
-            <h3 className="text-white font-medium mb-3">Drawn Tile</h3>
-            <div className="flex items-center space-x-4">
+          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
+            <h3 className="text-white font-medium mb-3 text-sm sm:text-base">Drawn Tile</h3>
+            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
               <TileComponent
                 tile={drawnTile}
                 isDrawn={true}
                 onClick={handleDrawnTileClick}
               />
-              <div className="flex space-x-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={handleKeepDrawnTile}
                   disabled={isProcessingTurn || !isPlayerTurn}
-                  className="bg-green-500 hover:bg-green-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
+                  className="bg-green-500 hover:bg-green-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm"
                 >
                   Keep Tile
                 </button>
                 <button
                   onClick={handleDiscardDrawnTile}
                   disabled={isProcessingTurn || !isPlayerTurn || !turnActions.canDiscard}
-                  className="bg-red-500 hover:bg-red-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
+                  className="bg-red-500 hover:bg-red-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm"
                 >
                   Discard Tile
                 </button>
@@ -1196,20 +1212,20 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         )}
 
-        {/* Player Hand */}
-        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-medium text-lg">
+        {/* Player Hand - Mobile Optimized */}
+        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+            <h3 className="text-white font-medium text-base sm:text-lg">
               Your Hand
               {isPlayerTurn && (
                 <span className="ml-2 text-amber-300 text-sm">● Your Turn</span>
               )}
             </h3>
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap gap-2">
               {canDeclareWin && (
                 <button
                   onClick={handleDeclareWin}
-                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-6 py-2 rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg animate-pulse"
+                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 sm:px-6 py-2 rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg animate-pulse text-sm sm:text-base"
                 >
                   🎉 Declare Mahjong!
                 </button>
@@ -1218,7 +1234,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 <button
                   onClick={handleDrawTile}
                   disabled={gameState.wall.length === 0 || isProcessingTurn}
-                  className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
+                  className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm"
                 >
                   Draw Tile
                 </button>
@@ -1227,7 +1243,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 <button
                   onClick={handlePlayerDiscard}
                   disabled={isProcessingTurn}
-                  className="bg-red-500 hover:bg-red-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
+                  className="bg-red-500 hover:bg-red-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm"
                 >
                   Discard Selected
                 </button>
@@ -1235,13 +1251,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             </div>
           </div>
           
-          <div className="flex flex-wrap gap-2 mb-4">
+          {/* Hand Tiles - Mobile Responsive Grid */}
+          <div className="grid grid-cols-7 sm:grid-cols-10 md:grid-cols-13 gap-1 sm:gap-2 mb-4 justify-items-center">
             {playerHand.map((tile, index) => (
               <TileComponent
                 key={tile.id}
                 tile={tile}
                 isSelected={selectedTileIndex === index}
                 onClick={() => handlePlayerTileClick(index)}
+                className="w-full max-w-[40px] sm:max-w-none"
               />
             ))}
           </div>
@@ -1249,15 +1267,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           {/* Player's Exposed Sets */}
           {gameState.players[0].exposedSets.length > 0 && (
             <div className="mb-4">
-              <h4 className="text-white font-medium mb-3">Your Exposed Sets:</h4>
-              <div className="flex flex-wrap gap-4">
+              <h4 className="text-white font-medium mb-3 text-sm sm:text-base">Your Exposed Sets:</h4>
+              <div className="flex flex-wrap gap-2 sm:gap-4">
                 {gameState.players[0].exposedSets.map((set, setIndex) => (
-                  <div key={setIndex} className="flex gap-1 bg-emerald-500/10 rounded-lg p-3 border border-emerald-400/30">
+                  <div key={setIndex} className="flex gap-1 bg-emerald-500/10 rounded-lg p-2 sm:p-3 border border-emerald-400/30">
                     {set.map((tile, tileIndex) => (
                       <TileComponent
                         key={tileIndex}
                         tile={tile}
-                        className="scale-75 border border-emerald-400/50"
+                        className="scale-[0.6] sm:scale-75 border border-emerald-400/50"
                       />
                     ))}
                   </div>
@@ -1266,7 +1284,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             </div>
           )}
           
-          <div className="text-emerald-200 text-sm">
+          {/* Game Status - Mobile Optimized */}
+          <div className="text-emerald-200 text-xs sm:text-sm space-y-1">
             <p>Tiles in hand: {playerHand.length}</p>
             {selectedTileIndex !== null && (
               <p>Selected tile: {playerHand[selectedTileIndex].type} {playerHand[selectedTileIndex].value || playerHand[selectedTileIndex].dragon || playerHand[selectedTileIndex].wind}</p>
@@ -1278,7 +1297,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               <p className="text-green-300 font-bold animate-pulse">🎉 You have a winning hand! Click "Declare Mahjong!" to win!</p>
             )}
             {isPlayerTurn && gameState.gamePhase === 'playing' && (
-              <div className="mt-2">
+              <div className="mt-2 space-y-1">
                 {isFirstTurn && (
                   <p className="text-amber-300 font-medium">As the dealer, you must discard first since you start with 14 tiles.</p>
                 )}
