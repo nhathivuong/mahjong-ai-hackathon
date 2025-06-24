@@ -54,33 +54,6 @@ const HomePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Game Features */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 text-center">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <Bot className="w-6 h-6 text-white" />
-            </div>
-            <h4 className="text-white font-medium mb-2">Smart AI Opponents</h4>
-            <p className="text-emerald-200 text-sm">Play against 3 intelligent bots with realistic gameplay</p>
-          </div>
-          
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 text-center">
-            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <span className="text-white text-xl font-bold">🀄</span>
-            </div>
-            <h4 className="text-white font-medium mb-2">Authentic Rules</h4>
-            <p className="text-emerald-200 text-sm">Traditional Chinese Mahjong with proper scoring</p>
-          </div>
-          
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 text-center">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
-            <h4 className="text-white font-medium mb-2">Beautiful Interface</h4>
-            <p className="text-emerald-200 text-sm">Elegant design with smooth animations and effects</p>
-          </div>
-        </div>
-
         {/* Rules Button */}
         <div className="text-center">
           <button
