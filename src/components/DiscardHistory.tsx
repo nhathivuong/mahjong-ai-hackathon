@@ -70,33 +70,37 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
 
   // Always use multi-row layout - no toggle needed
   const getMultiRowLayout = (tileCount: number, position: string) => {
-    const maxTiles = Math.min(tileCount, 24); // Show up to 24 tiles
+    const maxTiles = Math.min(tileCount, 20); // Reduced max tiles for better fit
     return {
       maxTiles,
-      layout: 'grid' // Always use grid layout
+      layout: 'grid'
     };
   };
 
-  // Generate responsive grid classes based on tile count and position
+  // Generate responsive grid classes with proper constraints
   const getGridClasses = (tileCount: number, position: string): string => {
     const layout = getMultiRowLayout(tileCount, position);
-    const { cols } = calculateGridDimensions(Math.min(tileCount, layout.maxTiles));
+    const actualTileCount = Math.min(tileCount, layout.maxTiles);
     
-    // Adjust grid based on position
+    // Adjust grid based on position with proper responsive constraints
     if (position === 'left' || position === 'right') {
-      // Vertical multi-row: fewer columns, more rows
-      const verticalCols = Math.min(cols, 3);
-      return `grid gap-1 justify-center max-h-[320px] overflow-hidden
-        grid-cols-${Math.min(verticalCols, 2)} 
-        sm:grid-cols-${Math.min(verticalCols, 3)}`;
+      // Vertical positions: limit to 2-3 columns max
+      if (actualTileCount <= 4) {
+        return 'grid grid-cols-2 gap-0.5 justify-center max-h-[280px] overflow-hidden';
+      } else if (actualTileCount <= 9) {
+        return 'grid grid-cols-2 sm:grid-cols-3 gap-0.5 justify-center max-h-[280px] overflow-hidden';
+      } else {
+        return 'grid grid-cols-2 sm:grid-cols-3 gap-0.5 justify-center max-h-[280px] overflow-hidden';
+      }
     } else {
-      // Horizontal multi-row: more columns, fewer rows
-      const horizontalCols = Math.min(cols, 12);
-      return `grid gap-1 justify-center max-w-[600px]
-        grid-cols-${Math.min(horizontalCols, 6)} 
-        sm:grid-cols-${Math.min(horizontalCols, 8)} 
-        md:grid-cols-${Math.min(horizontalCols, 10)} 
-        lg:grid-cols-${horizontalCols}`;
+      // Horizontal positions: limit width and use responsive columns
+      if (actualTileCount <= 6) {
+        return 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-0.5 justify-center max-w-[400px] sm:max-w-[500px]';
+      } else if (actualTileCount <= 12) {
+        return 'grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-0.5 justify-center max-w-[400px] sm:max-w-[500px] md:max-w-[600px]';
+      } else {
+        return 'grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-0.5 justify-center max-w-[400px] sm:max-w-[500px] md:max-w-[600px]';
+      }
     }
   };
 
@@ -104,31 +108,28 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
   const getDetailedGridClasses = (tileCount: number): string => {
     const { cols } = calculateGridDimensions(tileCount);
     
-    // Responsive adjustments for different screen sizes
-    let responsiveClasses = '';
+    // Responsive adjustments for different screen sizes with proper constraints
     if (cols <= 3) {
-      responsiveClasses = `grid-cols-${cols} sm:grid-cols-${cols} md:grid-cols-${cols}`;
+      return `grid grid-cols-${Math.min(cols, 3)} gap-2 sm:gap-3 justify-center`;
     } else if (cols <= 6) {
-      responsiveClasses = `grid-cols-${Math.min(cols, 4)} sm:grid-cols-${Math.min(cols, 5)} md:grid-cols-${cols}`;
+      return `grid grid-cols-3 sm:grid-cols-4 md:grid-cols-${Math.min(cols, 6)} gap-2 sm:gap-3 justify-center`;
     } else if (cols <= 8) {
-      responsiveClasses = `grid-cols-4 sm:grid-cols-6 md:grid-cols-${cols}`;
+      return `grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-${Math.min(cols, 8)} gap-2 sm:gap-3 justify-center`;
     } else {
-      responsiveClasses = `grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-${Math.min(cols, 10)} xl:grid-cols-${Math.min(cols, 12)}`;
+      return `grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-${Math.min(cols, 10)} gap-2 sm:gap-3 justify-center`;
     }
-    
-    return `grid ${responsiveClasses} gap-2 sm:gap-3`;
   };
 
   // Calculate tile size based on container and tile count
   const getTileSize = (tileCount: number): string => {
     if (tileCount <= 4) {
-      return 'w-16 h-20'; // Larger for few tiles
+      return 'w-12 h-16 sm:w-14 sm:h-18 md:w-16 md:h-20'; // Responsive sizing
     } else if (tileCount <= 9) {
-      return 'w-14 h-18'; // Medium size
+      return 'w-10 h-14 sm:w-12 sm:h-16 md:w-14 md:h-18';
     } else if (tileCount <= 16) {
-      return 'w-12 h-16'; // Smaller for more tiles
+      return 'w-8 h-12 sm:w-10 sm:h-14 md:w-12 md:h-16';
     } else {
-      return 'w-10 h-14'; // Compact for many tiles
+      return 'w-6 h-10 sm:w-8 sm:h-12 md:w-10 md:h-14';
     }
   };
 
@@ -143,7 +144,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
     const tileSize = getTileSize(playerDiscards.length);
     
     return (
-      <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
+      <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             <button
@@ -152,17 +153,17 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
             >
               <ChevronLeft className="w-4 h-4 text-white" />
             </button>
-            <h3 className="text-white font-medium text-lg">
+            <h3 className="text-white font-medium text-base sm:text-lg">
               {playerName}'s Discards
             </h3>
           </div>
-          <div className={`px-3 py-1 rounded-lg text-sm font-medium ${getPlayerColor(selectedPlayer)}`}>
+          <div className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium ${getPlayerColor(selectedPlayer)}`}>
             {playerName}
           </div>
         </div>
         
         {/* Responsive Grid Layout */}
-        <div className="bg-emerald-800/20 rounded-xl p-4 sm:p-6">
+        <div className="bg-emerald-800/20 rounded-xl p-3 sm:p-4 md:p-6 overflow-hidden">
           {playerDiscards.length > 0 ? (
             <div className={gridClasses}>
               {playerDiscards.map((discard, index) => (
@@ -172,8 +173,8 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                       tile={discard.tile}
                       className="w-full h-full opacity-90 hover:opacity-100 transition-opacity duration-200"
                     />
-                    {/* Turn number indicator - always visible in detailed view */}
-                    <div className="absolute -top-1 -right-1 bg-black/70 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                    {/* Turn number indicator */}
+                    <div className="absolute -top-1 -right-1 bg-black/70 text-white text-xs rounded-full w-3 h-3 sm:w-4 sm:h-4 flex items-center justify-center font-bold text-[8px] sm:text-xs">
                       {discard.turnNumber}
                     </div>
                   </div>
@@ -181,9 +182,9 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
               ))}
             </div>
           ) : (
-            <div className="text-center text-emerald-200 py-12">
-              <div className="text-4xl mb-4">🀄</div>
-              <p className="text-lg">No discards yet</p>
+            <div className="text-center text-emerald-200 py-8 sm:py-12">
+              <div className="text-3xl sm:text-4xl mb-4">🀄</div>
+              <p className="text-base sm:text-lg">No discards yet</p>
             </div>
           )}
         </div>
@@ -192,16 +193,16 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
   }
 
   return (
-    <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
+    <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-white font-medium text-lg">Discard History</h3>
-        <div className="text-emerald-200 text-sm">
+        <h3 className="text-white font-medium text-base sm:text-lg">Discard History</h3>
+        <div className="text-emerald-200 text-xs sm:text-sm">
           Click names for full grid view
         </div>
       </div>
       
       {/* Multi-row layout by default for ALL positions */}
-      <div className="relative w-full h-[32rem] bg-emerald-800/30 rounded-xl border border-emerald-600/30 overflow-hidden">
+      <div className="relative w-full h-[28rem] sm:h-[32rem] bg-emerald-800/30 rounded-xl border border-emerald-600/30 overflow-hidden">
         
         {/* Center - Most Recent Discard - Clean Center Display */}
         <div className="absolute top-[45%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
@@ -210,21 +211,21 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
               <div className="mb-3">
                 <TileComponent
                   tile={mostRecentDiscard.tile}
-                  className="scale-110 shadow-xl border-2 border-amber-400"
+                  className="scale-100 sm:scale-110 shadow-xl border-2 border-amber-400"
                 />
               </div>
-              <div className="bg-black/70 rounded-lg px-4 py-2">
-                <p className="text-white text-sm font-medium">
+              <div className="bg-black/70 rounded-lg px-3 sm:px-4 py-1.5 sm:py-2">
+                <p className="text-white text-xs sm:text-sm font-medium">
                   {mostRecentDiscard.playerName}
                 </p>
               </div>
             </div>
           ) : (
             <div className="flex flex-col items-center text-center text-emerald-200">
-              <div className="w-16 h-20 border-2 border-dashed border-emerald-400 rounded-lg flex items-center justify-center mb-2">
-                <span className="text-2xl">?</span>
+              <div className="w-12 h-16 sm:w-16 sm:h-20 border-2 border-dashed border-emerald-400 rounded-lg flex items-center justify-center mb-2">
+                <span className="text-xl sm:text-2xl">?</span>
               </div>
-              <p className="text-sm">No discards yet</p>
+              <p className="text-xs sm:text-sm">No discards yet</p>
             </div>
           )}
         </div>
@@ -241,19 +242,19 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
           switch (position) {
             case 'bottom':
               positionClasses = 'absolute bottom-2 left-1/2 transform -translate-x-1/2';
-              containerClasses = 'max-w-[600px]';
+              containerClasses = 'max-w-[300px] sm:max-w-[400px] md:max-w-[500px] lg:max-w-[600px]';
               break;
             case 'top':
               positionClasses = 'absolute top-2 left-1/2 transform -translate-x-1/2';
-              containerClasses = 'max-w-[600px]';
+              containerClasses = 'max-w-[300px] sm:max-w-[400px] md:max-w-[500px] lg:max-w-[600px]';
               break;
             case 'left':
               positionClasses = 'absolute left-2 top-1/2 transform -translate-y-1/2';
-              containerClasses = 'max-w-24';
+              containerClasses = 'max-w-16 sm:max-w-20 md:max-w-24';
               break;
             case 'right':
               positionClasses = 'absolute right-2 top-1/2 transform -translate-y-1/2';
-              containerClasses = 'max-w-24';
+              containerClasses = 'max-w-16 sm:max-w-20 md:max-w-24';
               break;
           }
 
@@ -263,15 +264,15 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
               <div className="text-center mb-1">
                 <button
                   onClick={() => setSelectedPlayer(player.id)}
-                  className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-xs font-medium transition-all hover:scale-105 ${getPlayerColor(player.id)} hover:shadow-md`}
+                  className={`inline-flex items-center space-x-1 px-1.5 sm:px-2 py-0.5 rounded-md text-xs font-medium transition-all hover:scale-105 ${getPlayerColor(player.id)} hover:shadow-md`}
                 >
-                  <span>{player.name}</span>
-                  <ChevronRight className="w-3 h-3" />
+                  <span className="truncate max-w-[60px] sm:max-w-none">{player.name}</span>
+                  <ChevronRight className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                 </button>
               </div>
               
               {/* Tile container */}
-              <div className={`${containerClasses} bg-white/5 rounded-lg border border-white/10 p-1`}>
+              <div className={`${containerClasses} bg-white/5 rounded-lg border border-white/10 p-0.5 sm:p-1`}>
                 {playerDiscards.length > 0 ? (
                   <div className={getGridClasses(playerDiscards.length, position)}>
                     {playerDiscards.slice(0, layout.maxTiles).map((discard, index) => (
@@ -287,13 +288,13 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
                       </div>
                     ))}
                     {playerDiscards.length > layout.maxTiles && (
-                      <div className="flex items-center justify-center text-emerald-300 text-xs p-1 bg-white/10 rounded border border-white/20">
+                      <div className="flex items-center justify-center text-emerald-300 text-[10px] sm:text-xs p-0.5 sm:p-1 bg-white/10 rounded border border-white/20">
                         +{playerDiscards.length - layout.maxTiles}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center text-emerald-300 text-xs p-2">
+                  <div className="flex items-center justify-center text-emerald-300 text-[10px] sm:text-xs p-1 sm:p-2">
                     No discards
                   </div>
                 )}
@@ -304,7 +305,7 @@ const DiscardHistory: React.FC<DiscardHistoryProps> = ({ discardPile, players })
       </div>
 
       {/* Clean Summary */}
-      <div className="mt-4 flex justify-between items-center text-sm">
+      <div className="mt-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-xs sm:text-sm">
         <div className="text-emerald-200">
           {mostRecentDiscard && (
             <>
