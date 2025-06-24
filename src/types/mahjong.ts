@@ -34,8 +34,11 @@ export interface GameState {
   wall: Tile[];
   discardPile: DiscardedTile[];
   round: number;
-  gamePhase: 'setup' | 'playing' | 'finished';
+  gamePhase: 'setup' | 'playing' | 'finished' | 'draw';
   winner?: string;
   turnNumber: number;
-  drawReason?: 'riichi-declared' | 'wall-exhausted-winner' | 'wall-exhausted-draw';
+  drawReason?: 'wall-exhausted' | 'too-many-turns';
+  finalScores?: number[];
+  winType?: 'self-drawn' | 'claimed';
+  winScore?: number;
 }
