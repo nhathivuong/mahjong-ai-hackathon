@@ -612,44 +612,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         )}
 
-        {/* Player Hand */}
-        <div className="mb-8">
-          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
-            <h3 className="text-white font-medium text-lg mb-4 text-center">Your Hand</h3>
-            <div className="flex flex-wrap justify-center gap-2">
-              {playerHand.hand.map((tile) => (
-                <TileComponent
-                  key={tile.id}
-                  tile={tile}
-                  isSelected={selectedTile === tile.id}
-                  onClick={() => handleTileClick(tile.id)}
-                  className="transition-all duration-200"
-                />
-              ))}
-            </div>
-            
-            {/* Exposed Sets */}
-            {playerHand.exposedSets.length > 0 && (
-              <div className="mt-6">
-                <h4 className="text-emerald-200 font-medium mb-3 text-center">Your Exposed Sets</h4>
-                <div className="flex flex-wrap justify-center gap-4">
-                  {playerHand.exposedSets.map((set, index) => (
-                    <div key={index} className="flex gap-1 bg-white/5 rounded-lg p-2">
-                      {set.map((tile, tileIndex) => (
-                        <TileComponent
-                          key={`${tile.id}-${tileIndex}`}
-                          tile={tile}
-                          height="compact"
-                        />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Bot Hands Display */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {gameState.players.slice(1).map((bot) => (
@@ -700,10 +662,48 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         </div>
 
         {/* Discard History */}
-        <DiscardHistory 
-          discardPile={gameState.discardPile} 
-          players={gameState.players}
-        />
+        <div className="mb-8">
+          <DiscardHistory 
+            discardPile={gameState.discardPile} 
+            players={gameState.players}
+          />
+        </div>
+
+        {/* Player Hand - Now at the bottom */}
+        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
+          <h3 className="text-white font-medium text-lg mb-4 text-center">Your Hand</h3>
+          <div className="flex flex-wrap justify-center gap-2">
+            {playerHand.hand.map((tile) => (
+              <TileComponent
+                key={tile.id}
+                tile={tile}
+                isSelected={selectedTile === tile.id}
+                onClick={() => handleTileClick(tile.id)}
+                className="transition-all duration-200"
+              />
+            ))}
+          </div>
+          
+          {/* Exposed Sets */}
+          {playerHand.exposedSets.length > 0 && (
+            <div className="mt-6">
+              <h4 className="text-emerald-200 font-medium mb-3 text-center">Your Exposed Sets</h4>
+              <div className="flex flex-wrap justify-center gap-4">
+                {playerHand.exposedSets.map((set, index) => (
+                  <div key={index} className="flex gap-1 bg-white/5 rounded-lg p-2">
+                    {set.map((tile, tileIndex) => (
+                      <TileComponent
+                        key={`${tile.id}-${tileIndex}`}
+                        tile={tile}
+                        height="compact"
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
