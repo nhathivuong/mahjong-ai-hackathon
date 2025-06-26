@@ -17,7 +17,7 @@ import { SoundManager } from '../utils/soundUtils';
 import TileComponent from './TileComponent';
 import DiscardHistory from './DiscardHistory';
 import BotActionIndicator, { BotActionType } from './BotActionIndicator';
-import { Volume2, VolumeX, RotateCcw, Trophy, Users, Clock, Eye } from 'lucide-react';
+import { Volume2, VolumeX, RotateCcw, Trophy, Users, Clock, Eye, X } from 'lucide-react';
 
 interface GameBoardProps {
   gameMode: 'bot' | 'multiplayer';
@@ -26,7 +26,13 @@ interface GameBoardProps {
 interface BotAction {
   type: BotActionType;
   playerName: string;
-  tiles?: Tile[]; // Changed from string[] to Tile[]
+  tiles?: Tile[];
+}
+
+interface ClaimOption {
+  type: 'chow' | 'pung' | 'kong' | 'win';
+  tiles: Tile[];
+  discardedTile: Tile;
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
@@ -35,7 +41,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [botAction, setBotAction] = useState<BotAction | null>(null);
-  const [isFirstMove, setIsFirstMove] = useState(true); // Track if it's the first move
+  const [isFirstMove, setIsFirstMove] = useState(true);
+  const [claimOptions, setClaimOptions] = useState<ClaimOption[]>([]);
+  const [showClaimDialog, setShowClaimDialog] = useState(false);
+  const [pendingDiscard, setPendingDiscard] = useState<DiscardedTile | null>(null);
   const soundManager = SoundManager.getInstance();
 
   // Initialize game
@@ -96,7 +105,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     };
 
     setGameState(newGameState);
-    setIsFirstMove(true); // Reset first move flag
+    setIsFirstMove(true);
+    setClaimOptions([]);
+    setShowClaimDialog(false);
+    setPendingDiscard(null);
     soundManager.playTransitionSound('game-start');
   }, [soundManager]);
 
@@ -117,7 +129,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   // Helper function to remove claimed tile from discard pile
   const removeClaimedTileFromDiscardPile = (discardPile: DiscardedTile[], claimedTile: Tile): DiscardedTile[] => {
-    // Find and remove the most recent matching tile from discard pile
     const updatedDiscardPile = [...discardPile];
     for (let i = updatedDiscardPile.length - 1; i >= 0; i--) {
       const discardedTile = updatedDiscardPile[i];
@@ -130,6 +141,138 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       }
     }
     return updatedDiscardPile;
+  };
+
+  // Check if player can claim the discarded tile
+  const checkPlayerClaims = (gameState: GameState, discardedTile: DiscardedTile): ClaimOption[] => {
+    const player = gameState.players[0]; // Human player
+    const options: ClaimOption[] = [];
+    
+    // Don't allow claiming own discards
+    if (discardedTile.playerId === player.id) return options;
+
+    // Check for win first (highest priority)
+    const testHand = [...player.hand, discardedTile.tile];
+    if (isWinningHand(testHand, player.exposedSets)) {
+      options.push({
+        type: 'win',
+        tiles: [discardedTile.tile],
+        discardedTile: discardedTile.tile
+      });
+    }
+
+    // Check for kong (second priority)
+    const kongTiles = canFormKong(player.hand, discardedTile.tile);
+    if (kongTiles) {
+      options.push({
+        type: 'kong',
+        tiles: [discardedTile.tile, ...kongTiles],
+        discardedTile: discardedTile.tile
+      });
+    }
+
+    // Check for pung (third priority)
+    const pungTiles = canFormPung(player.hand, discardedTile.tile);
+    if (pungTiles) {
+      options.push({
+        type: 'pung',
+        tiles: [discardedTile.tile, ...pungTiles],
+        discardedTile: discardedTile.tile
+      });
+    }
+
+    // Check for chow (lowest priority, only from previous player)
+    const currentPlayerIndex = gameState.currentPlayer;
+    const discardingPlayerIndex = gameState.players.findIndex(p => p.id === discardedTile.playerId);
+    const nextPlayerIndex = (discardingPlayerIndex + 1) % gameState.players.length;
+    
+    // Only allow chow if the player is the next in turn order after the discarder
+    if (nextPlayerIndex === 0) { // Player is next after the discarder
+      const chowOptions = canFormChow(player.hand, discardedTile.tile);
+      chowOptions.forEach(chowTiles => {
+        const sequenceTiles = [discardedTile.tile, ...chowTiles].sort((a, b) => (a.value || 0) - (b.value || 0));
+        options.push({
+          type: 'chow',
+          tiles: sequenceTiles,
+          discardedTile: discardedTile.tile
+        });
+      });
+    }
+
+    return options;
+  };
+
+  // Handle player claim
+  const handlePlayerClaim = (option: ClaimOption) => {
+    if (!gameState || !pendingDiscard) return;
+
+    const player = gameState.players[0];
+    let newHand = [...player.hand];
+    let newExposedSets = [...player.exposedSets];
+    let newGameState = { ...gameState };
+
+    // Remove claimed tile from discard pile
+    const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, option.discardedTile);
+
+    if (option.type === 'win') {
+      // Handle win
+      const testHand = [...player.hand, option.discardedTile];
+      const winScore = calculateWinScore(testHand, player.exposedSets, 'claimed', player.isDealer);
+      
+      newGameState = {
+        ...gameState,
+        gamePhase: 'finished',
+        winner: player.id,
+        winType: 'claimed',
+        winScore,
+        discardPile: updatedDiscardPile,
+        players: gameState.players.map(p => 
+          p.id === player.id 
+            ? { ...p, hand: testHand, score: p.score + winScore }
+            : p
+        )
+      };
+      
+      soundManager.playWinSound();
+    } else {
+      // Handle other claims (chow, pung, kong)
+      const tilesToRemove = option.tiles.slice(1); // Remove the discarded tile from the list
+      newHand = player.hand.filter(tile => !tilesToRemove.some(t => t.id === tile.id));
+      newExposedSets.push(option.tiles);
+
+      newGameState = {
+        ...gameState,
+        currentPlayer: 0, // Player gets the turn after claiming
+        discardPile: updatedDiscardPile,
+        players: gameState.players.map(p => 
+          p.id === player.id 
+            ? { ...p, hand: newHand, exposedSets: newExposedSets }
+            : p
+        )
+      };
+
+      soundManager.playTileSound('claim', 'center');
+    }
+
+    setGameState(newGameState);
+    setClaimOptions([]);
+    setShowClaimDialog(false);
+    setPendingDiscard(null);
+  };
+
+  // Handle claim dialog timeout or skip
+  const handleClaimSkip = () => {
+    if (!gameState || !pendingDiscard) return;
+
+    // Continue with bot claims check
+    const claimResult = checkBotClaims(gameState, pendingDiscard);
+    if (claimResult) {
+      setGameState(claimResult);
+    }
+
+    setClaimOptions([]);
+    setShowClaimDialog(false);
+    setPendingDiscard(null);
   };
 
   // Bot AI logic
@@ -147,8 +290,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     if (isWinningHand(newHand, botPlayer.exposedSets)) {
       const winScore = calculateWinScore(newHand, botPlayer.exposedSets, 'self-drawn', botPlayer.isDealer);
       
-      // Show win indicator with winning tiles
-      showBotAction('win', botPlayer.name, newHand.slice(-4)); // Show last 4 tiles as example
+      showBotAction('win', botPlayer.name, newHand.slice(-4));
       
       return {
         ...gameState,
@@ -167,11 +309,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
     // Check if bot can form kong with drawn tile
     const kongTiles = canFormKong(botPlayer.hand, drawnTile);
-    if (kongTiles && Math.random() > 0.3) { // 70% chance to kong
+    if (kongTiles && Math.random() > 0.3) {
       const newExposedSets = [...botPlayer.exposedSets, [drawnTile, ...kongTiles]];
       const remainingHand = botPlayer.hand.filter(tile => !kongTiles.includes(tile));
       
-      // Show kong indicator with all 4 tiles
       showBotAction('kong', botPlayer.name, [drawnTile, ...kongTiles]);
       
       return {
@@ -185,7 +326,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       };
     }
 
-    // Simple discard logic - discard a tile that doesn't help form sets
+    // Simple discard logic
     const tileToDiscard = chooseBotDiscard(newHand, botPlayer.exposedSets);
     const finalHand = newHand.filter(tile => tile.id !== tileToDiscard.id);
 
@@ -228,10 +369,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       if (isWinningHand(testHand, player.exposedSets)) {
         const winScore = calculateWinScore(testHand, player.exposedSets, 'claimed', player.isDealer);
         
-        // Show win indicator with winning tiles
-        showBotAction('win', player.name, testHand.slice(-4)); // Show last 4 tiles as example
+        showBotAction('win', player.name, testHand.slice(-4));
         
-        // Remove claimed tile from discard pile
         const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
         
         return {
@@ -252,14 +391,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
       // Check for kong (second priority)
       const kongTiles = canFormKong(player.hand, discardedTile.tile);
-      if (kongTiles && Math.random() > 0.4) { // 60% chance
+      if (kongTiles && Math.random() > 0.4) {
         const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...kongTiles]];
         const newHand = player.hand.filter(tile => !kongTiles.includes(tile));
         
-        // Show kong indicator with all 4 tiles
         showBotAction('kong', player.name, [discardedTile.tile, ...kongTiles]);
         
-        // Remove claimed tile from discard pile
         const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
         
         return {
@@ -276,14 +413,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
       // Check for pung (third priority)
       const pungTiles = canFormPung(player.hand, discardedTile.tile);
-      if (pungTiles && Math.random() > 0.5) { // 50% chance
+      if (pungTiles && Math.random() > 0.5) {
         const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...pungTiles]];
         const newHand = player.hand.filter(tile => !pungTiles.includes(tile));
         
-        // Show pung indicator with all 3 tiles
         showBotAction('pung', player.name, [discardedTile.tile, ...pungTiles]);
         
-        // Remove claimed tile from discard pile
         const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
         
         return {
@@ -299,18 +434,16 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       }
 
       // Check for chow (lowest priority, only from previous player)
-      if (i === 1) { // Only immediate next player can chow
+      if (i === 1) {
         const chowOptions = canFormChow(player.hand, discardedTile.tile);
-        if (chowOptions.length > 0 && Math.random() > 0.6) { // 40% chance
-          const chowTiles = chowOptions[0]; // Take first option
+        if (chowOptions.length > 0 && Math.random() > 0.6) {
+          const chowTiles = chowOptions[0];
           const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...chowTiles]];
           const newHand = player.hand.filter(tile => !chowTiles.includes(tile));
           
-          // Show chow indicator with all 3 tiles in sequence
           const sequenceTiles = [discardedTile.tile, ...chowTiles].sort((a, b) => (a.value || 0) - (b.value || 0));
           showBotAction('chow', player.name, sequenceTiles);
           
-          // Remove claimed tile from discard pile
           const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
           
           return {
@@ -327,12 +460,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       }
     }
 
-    return null; // No claims
+    return null;
   }, []);
 
   // Bot discard selection logic
   const chooseBotDiscard = (hand: Tile[], exposedSets: Tile[][]): Tile => {
-    // Simple strategy: discard tiles that are least likely to form sets
     const tileValues = new Map<string, number>();
     
     hand.forEach(tile => {
@@ -340,7 +472,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       tileValues.set(key, (tileValues.get(key) || 0) + 1);
     });
 
-    // Prefer to keep pairs and potential sequences
     let worstTile = hand[0];
     let worstScore = Infinity;
 
@@ -349,15 +480,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       const key = `${tile.type}-${tile.value || tile.dragon || tile.wind}`;
       const count = tileValues.get(key) || 0;
       
-      // Penalty for breaking pairs
       if (count >= 2) score += 10;
-      
-      // Bonus for honor tiles (harder to form sequences)
       if (tile.type === 'dragon' || tile.type === 'wind') score -= 5;
       
-      // Check if tile could form sequences (for suited tiles)
       if (tile.value && (tile.type === 'bamboo' || tile.type === 'character' || tile.type === 'dot')) {
-        // Check for potential sequences
         const hasAdjacent = hand.some(t => 
           t.type === tile.type && t.value && Math.abs(t.value - tile.value!) === 1
         );
@@ -414,15 +540,25 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       )
     };
 
-    // Check if any bot wants to claim the discarded tile
-    const claimResult = checkBotClaims(newGameState, newDiscardPile[newDiscardPile.length - 1]);
-    if (claimResult) {
-      newGameState = claimResult;
+    // Check if player can claim (this shouldn't happen for own discard, but keeping for completeness)
+    const playerClaimOptions = checkPlayerClaims(newGameState, newDiscardPile[newDiscardPile.length - 1]);
+    
+    if (playerClaimOptions.length > 0) {
+      setClaimOptions(playerClaimOptions);
+      setShowClaimDialog(true);
+      setPendingDiscard(newDiscardPile[newDiscardPile.length - 1]);
+      setGameState(newGameState);
+    } else {
+      // Check if any bot wants to claim the discarded tile
+      const claimResult = checkBotClaims(newGameState, newDiscardPile[newDiscardPile.length - 1]);
+      if (claimResult) {
+        newGameState = claimResult;
+      }
+      setGameState(newGameState);
     }
 
-    setGameState(newGameState);
     setSelectedTile(null);
-    setIsFirstMove(false); // No longer the first move after first discard
+    setIsFirstMove(false);
     soundManager.playTileSound('discard', 'bottom');
   };
 
@@ -432,7 +568,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       return;
     }
 
-    // Prevent drawing on the first move
     if (isFirstMove) {
       soundManager.playErrorSound();
       return;
@@ -443,7 +578,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     const player = gameState.players[0];
     const newHand = sortTiles([...player.hand, drawnTile]);
 
-    // Check for win
     if (isWinningHand(newHand, player.exposedSets)) {
       const winScore = calculateWinScore(newHand, player.exposedSets, 'self-drawn', player.isDealer);
       
@@ -484,7 +618,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     
     if (currentPlayer.isBot) {
       const timer = setTimeout(() => {
-        // Check for draw conditions
         const drawReason = checkDrawCondition(gameState.wall.length, gameState.turnNumber);
         if (drawReason) {
           const finalScores = calculateDrawScores(gameState.players);
@@ -499,13 +632,37 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
         const newGameState = makeBotMove(currentPlayer, gameState);
         
-        // Move to next player if game is still playing
         if (newGameState.gamePhase === 'playing') {
           const nextPlayer = (gameState.currentPlayer + 1) % gameState.players.length;
-          setGameState({
+          const updatedGameState = {
             ...newGameState,
             currentPlayer: nextPlayer
-          });
+          };
+
+          // Check if player can claim the bot's discard
+          const lastDiscard = newGameState.discardPile[newGameState.discardPile.length - 1];
+          if (lastDiscard && lastDiscard.playerId !== 'player1') {
+            const playerClaimOptions = checkPlayerClaims(updatedGameState, lastDiscard);
+            
+            if (playerClaimOptions.length > 0) {
+              setClaimOptions(playerClaimOptions);
+              setShowClaimDialog(true);
+              setPendingDiscard(lastDiscard);
+              setGameState(updatedGameState);
+              return;
+            }
+          }
+
+          // If no player claims, check bot claims
+          if (lastDiscard) {
+            const claimResult = checkBotClaims(updatedGameState, lastDiscard);
+            if (claimResult) {
+              setGameState(claimResult);
+              return;
+            }
+          }
+
+          setGameState(updatedGameState);
         } else {
           setGameState(newGameState);
           if (newGameState.gamePhase === 'finished') {
@@ -513,16 +670,26 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           }
         }
 
-        // Play appropriate sound
         const position = currentPlayer.id === 'bot1' ? 'right' : 
                         currentPlayer.id === 'bot2' ? 'top' : 'left';
         soundManager.playTileSound('discard', position);
         soundManager.playTransitionSound('turn-change');
-      }, 1500); // Bot thinking time
+      }, 1500);
 
       return () => clearTimeout(timer);
     }
   }, [gameState, makeBotMove, soundManager, checkBotClaims]);
+
+  // Auto-close claim dialog after timeout
+  useEffect(() => {
+    if (showClaimDialog) {
+      const timer = setTimeout(() => {
+        handleClaimSkip();
+      }, 8000); // 8 seconds to decide
+
+      return () => clearTimeout(timer);
+    }
+  }, [showClaimDialog]);
 
   if (!gameState) {
     return (
@@ -536,8 +703,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const playerHand = gameState.players[0];
   const canDraw = gameState.currentPlayer === 0 && gameState.wall.length > 0 && !isFirstMove;
   const canDiscard = gameState.currentPlayer === 0 && selectedTile !== null;
-
-  // Check if game is finished to show all tiles
   const isGameFinished = gameState.gamePhase === 'finished' || gameState.gamePhase === 'draw';
 
   return (
@@ -550,6 +715,67 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           tiles={botAction.tiles}
           onComplete={() => setBotAction(null)}
         />
+      )}
+
+      {/* Claim Dialog */}
+      {showClaimDialog && claimOptions.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-bold text-xl">Claim Tile?</h3>
+              <button
+                onClick={handleClaimSkip}
+                className="p-2 text-white/60 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <p className="text-emerald-200 mb-4">
+              You can claim the discarded tile:
+            </p>
+            
+            {pendingDiscard && (
+              <div className="flex justify-center mb-4">
+                <TileComponent tile={pendingDiscard.tile} className="border-2 border-amber-400" />
+              </div>
+            )}
+            
+            <div className="space-y-3">
+              {claimOptions.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => handlePlayerClaim(option)}
+                  className="w-full p-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white transition-all duration-200 hover:scale-105"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium capitalize">{option.type}</span>
+                    <div className="flex gap-1">
+                      {option.tiles.slice(0, 4).map((tile, tileIndex) => (
+                        <TileComponent
+                          key={tileIndex}
+                          tile={tile}
+                          height="compact"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </button>
+              ))}
+              
+              <button
+                onClick={handleClaimSkip}
+                className="w-full p-3 bg-gray-600/50 hover:bg-gray-600/70 border border-gray-500/50 rounded-lg text-white transition-all duration-200"
+              >
+                Skip / Pass
+              </button>
+            </div>
+            
+            <div className="mt-4 text-center text-xs text-emerald-300">
+              Auto-skip in 8 seconds
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="max-w-7xl mx-auto">
@@ -642,7 +868,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         )}
 
-        {/* Bot Hands Display - Show all tiles when game is finished */}
+        {/* Bot Hands Display */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {gameState.players.slice(1).map((bot) => (
             <div key={bot.id} className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4">
@@ -654,10 +880,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 )}
               </div>
               
-              {/* Show actual tiles when game is finished, otherwise show backs */}
               <div className="flex flex-wrap justify-center gap-1 mb-4">
                 {isGameFinished ? (
-                  // Show all actual tiles when game is finished
                   bot.hand.map((tile, index) => (
                     <TileComponent
                       key={`${tile.id}-${index}`}
@@ -667,14 +891,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                     />
                   ))
                 ) : (
-                  // Show tile backs during gameplay
                   <>
                     {bot.hand.slice(0, Math.min(bot.hand.length, 8)).map((_, index) => (
                       <div
                         key={index}
                         className="w-8 h-12 bg-gradient-to-b from-emerald-600 to-emerald-700 rounded border border-emerald-500 flex items-center justify-center"
                       >
-                        {/* Removed the 🀄 character to avoid confusion with red dragon */}
                       </div>
                     ))}
                     {bot.hand.length > 8 && (
@@ -686,7 +908,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 )}
               </div>
 
-              {/* Exposed Sets */}
               {bot.exposedSets.length > 0 && (
                 <div>
                   <h4 className="text-emerald-200 font-medium mb-2 text-center text-sm">Exposed Sets</h4>
@@ -717,7 +938,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           />
         </div>
 
-        {/* Player Hand - Now at the bottom */}
+        {/* Player Hand */}
         <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
           <div className="flex items-center justify-center space-x-3 mb-4">
             <h3 className="text-white font-medium text-lg">Your Hand</h3>
@@ -739,7 +960,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             ))}
           </div>
 
-          {/* Player Actions - Now positioned right below the hand */}
+          {/* Player Actions */}
           {gameState.gamePhase === 'playing' && gameState.currentPlayer === 0 && (
             <div className="flex justify-center space-x-4 mb-6">
               <button
