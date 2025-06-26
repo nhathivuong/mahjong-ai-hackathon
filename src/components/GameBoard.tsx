@@ -35,6 +35,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [botAction, setBotAction] = useState<BotAction | null>(null);
+  const [isFirstMove, setIsFirstMove] = useState(true); // Track if it's the first move
   const soundManager = SoundManager.getInstance();
 
   // Initialize game
@@ -95,6 +96,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     };
 
     setGameState(newGameState);
+    setIsFirstMove(true); // Reset first move flag
     soundManager.playTransitionSound('game-start');
   }, [soundManager]);
 
@@ -420,12 +422,19 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
     setGameState(newGameState);
     setSelectedTile(null);
+    setIsFirstMove(false); // No longer the first move after first discard
     soundManager.playTileSound('discard', 'bottom');
   };
 
   // Handle draw tile
   const handleDrawTile = () => {
     if (!gameState || gameState.currentPlayer !== 0 || gameState.wall.length === 0) {
+      return;
+    }
+
+    // Prevent drawing on the first move
+    if (isFirstMove) {
+      soundManager.playErrorSound();
       return;
     }
 
@@ -525,7 +534,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   const currentPlayer = gameState.players[gameState.currentPlayer];
   const playerHand = gameState.players[0];
-  const canDraw = gameState.currentPlayer === 0 && gameState.wall.length > 0;
+  const canDraw = gameState.currentPlayer === 0 && gameState.wall.length > 0 && !isFirstMove;
   const canDiscard = gameState.currentPlayer === 0 && selectedTile !== null;
 
   // Check if game is finished to show all tiles
@@ -556,6 +565,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
               <span className="text-white font-medium">Wall: {gameState.wall.length}</span>
             </div>
+            {isFirstMove && gameState.currentPlayer === 0 && (
+              <div className="bg-amber-500/20 backdrop-blur-sm border border-amber-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
+                <span className="text-amber-200 font-medium text-sm">First move: Must discard</span>
+              </div>
+            )}
             {isGameFinished && (
               <div className="bg-amber-500/20 backdrop-blur-sm border border-amber-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
                 <Eye className="w-4 h-4 text-amber-400" />
@@ -588,7 +602,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               <div className="flex items-center justify-center space-x-3">
                 <Users className="w-5 h-5 text-emerald-300" />
                 <span className="text-white font-medium text-lg">
-                  {currentPlayer.isBot ? `${currentPlayer.name} is thinking...` : "Your turn"}
+                  {currentPlayer.isBot ? `${currentPlayer.name} is thinking...` : 
+                   isFirstMove ? "Your turn - Must discard a tile first" : "Your turn"}
                 </span>
                 {currentPlayer.isBot && <Clock className="w-4 h-4 text-emerald-300 animate-spin" />}
               </div>
@@ -735,8 +750,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                     ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl hover:scale-105'
                     : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                 }`}
+                title={isFirstMove ? "Must discard a tile first" : `Draw from wall (${gameState.wall.length} tiles left)`}
               >
-                Draw Tile ({gameState.wall.length} left)
+                {isFirstMove ? "Draw Disabled" : `Draw Tile (${gameState.wall.length} left)`}
               </button>
               <button
                 onClick={handleDiscard}
@@ -747,8 +763,21 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                     : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                 }`}
               >
-                Discard Selected
+                {isFirstMove ? "Discard Selected (Required)" : "Discard Selected"}
               </button>
+            </div>
+          )}
+          
+          {/* First Move Instructions */}
+          {isFirstMove && gameState.currentPlayer === 0 && gameState.gamePhase === 'playing' && (
+            <div className="bg-amber-500/10 border border-amber-400/30 rounded-lg p-4 mb-4">
+              <div className="text-center">
+                <p className="text-amber-200 font-medium mb-2">🎯 First Move Rules</p>
+                <p className="text-emerald-200 text-sm">
+                  As the dealer, you start with 14 tiles. You must discard one tile before you can draw from the wall.
+                  Select a tile from your hand and click "Discard Selected" to begin the game.
+                </p>
+              </div>
             </div>
           )}
           
