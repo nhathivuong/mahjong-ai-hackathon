@@ -594,14 +594,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 {bot.hand.length} tiles in hand
               </div>
               
-              {/* Show back of tiles */}
+              {/* Show back of tiles - removed the character */}
               <div className="flex flex-wrap justify-center gap-1 mb-4">
                 {bot.hand.slice(0, Math.min(bot.hand.length, 8)).map((_, index) => (
                   <div
                     key={index}
                     className="w-8 h-12 bg-gradient-to-b from-emerald-600 to-emerald-700 rounded border border-emerald-500 flex items-center justify-center"
                   >
-                    <span className="text-emerald-200 text-xs">🀄</span>
+                    {/* Removed the 🀄 character to avoid confusion with red dragon */}
                   </div>
                 ))}
                 {bot.hand.length > 8 && (
