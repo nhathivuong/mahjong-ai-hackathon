@@ -584,34 +584,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         )}
 
-        {/* Player Actions */}
-        {gameState.gamePhase === 'playing' && gameState.currentPlayer === 0 && (
-          <div className="flex justify-center space-x-4 mb-6">
-            <button
-              onClick={handleDrawTile}
-              disabled={!canDraw}
-              className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
-                canDraw
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl'
-                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              Draw Tile ({gameState.wall.length} left)
-            </button>
-            <button
-              onClick={handleDiscard}
-              disabled={!canDiscard}
-              className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
-                canDiscard
-                  ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg hover:shadow-xl'
-                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              Discard Selected
-            </button>
-          </div>
-        )}
-
         {/* Bot Hands Display */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {gameState.players.slice(1).map((bot) => (
@@ -672,7 +644,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         {/* Player Hand - Now at the bottom */}
         <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
           <h3 className="text-white font-medium text-lg mb-4 text-center">Your Hand</h3>
-          <div className="flex flex-wrap justify-center gap-2">
+          <div className="flex flex-wrap justify-center gap-2 mb-6">
             {playerHand.hand.map((tile) => (
               <TileComponent
                 key={tile.id}
@@ -683,10 +655,38 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               />
             ))}
           </div>
+
+          {/* Player Actions - Now positioned right below the hand */}
+          {gameState.gamePhase === 'playing' && gameState.currentPlayer === 0 && (
+            <div className="flex justify-center space-x-4 mb-6">
+              <button
+                onClick={handleDrawTile}
+                disabled={!canDraw}
+                className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
+                  canDraw
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl hover:scale-105'
+                    : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Draw Tile ({gameState.wall.length} left)
+              </button>
+              <button
+                onClick={handleDiscard}
+                disabled={!canDiscard}
+                className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
+                  canDiscard
+                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg hover:shadow-xl hover:scale-105'
+                    : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Discard Selected
+              </button>
+            </div>
+          )}
           
           {/* Exposed Sets */}
           {playerHand.exposedSets.length > 0 && (
-            <div className="mt-6">
+            <div>
               <h4 className="text-emerald-200 font-medium mb-3 text-center">Your Exposed Sets</h4>
               <div className="flex flex-wrap justify-center gap-4">
                 {playerHand.exposedSets.map((set, index) => (
