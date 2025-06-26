@@ -17,7 +17,7 @@ import { SoundManager } from '../utils/soundUtils';
 import TileComponent from './TileComponent';
 import DiscardHistory from './DiscardHistory';
 import BotActionIndicator, { BotActionType } from './BotActionIndicator';
-import { Volume2, VolumeX, RotateCcw, Trophy, Users, Clock } from 'lucide-react';
+import { Volume2, VolumeX, RotateCcw, Trophy, Users, Clock, Eye } from 'lucide-react';
 
 interface GameBoardProps {
   gameMode: 'bot' | 'multiplayer';
@@ -495,6 +495,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const canDraw = gameState.currentPlayer === 0 && gameState.wall.length > 0;
   const canDiscard = gameState.currentPlayer === 0 && selectedTile !== null;
 
+  // Check if game is finished to show all tiles
+  const isGameFinished = gameState.gamePhase === 'finished' || gameState.gamePhase === 'draw';
+
   return (
     <div className="min-h-screen p-4">
       {/* Bot Action Indicator */}
@@ -520,6 +523,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
               <span className="text-white font-medium">Wall: {gameState.wall.length}</span>
             </div>
+            {isGameFinished && (
+              <div className="bg-amber-500/20 backdrop-blur-sm border border-amber-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
+                <Eye className="w-4 h-4 text-amber-400" />
+                <span className="text-amber-200 font-medium">All tiles revealed</span>
+              </div>
+            )}
           </div>
 
           {/* Settings */}
@@ -585,29 +594,47 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         )}
 
-        {/* Bot Hands Display */}
+        {/* Bot Hands Display - Show all tiles when game is finished */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {gameState.players.slice(1).map((bot) => (
             <div key={bot.id} className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4">
               <h3 className="text-white font-medium mb-3 text-center">{bot.name}</h3>
               <div className="text-center text-emerald-200 mb-2">
                 {bot.hand.length} tiles in hand
+                {gameState.winner === bot.id && (
+                  <span className="ml-2 text-amber-400 font-bold">👑 WINNER</span>
+                )}
               </div>
               
-              {/* Show back of tiles - removed the character */}
+              {/* Show actual tiles when game is finished, otherwise show backs */}
               <div className="flex flex-wrap justify-center gap-1 mb-4">
-                {bot.hand.slice(0, Math.min(bot.hand.length, 8)).map((_, index) => (
-                  <div
-                    key={index}
-                    className="w-8 h-12 bg-gradient-to-b from-emerald-600 to-emerald-700 rounded border border-emerald-500 flex items-center justify-center"
-                  >
-                    {/* Removed the 🀄 character to avoid confusion with red dragon */}
-                  </div>
-                ))}
-                {bot.hand.length > 8 && (
-                  <div className="w-8 h-12 bg-emerald-600/50 rounded border border-emerald-500 flex items-center justify-center">
-                    <span className="text-emerald-200 text-xs">+{bot.hand.length - 8}</span>
-                  </div>
+                {isGameFinished ? (
+                  // Show all actual tiles when game is finished
+                  bot.hand.map((tile, index) => (
+                    <TileComponent
+                      key={`${tile.id}-${index}`}
+                      tile={tile}
+                      height="compact"
+                      className={gameState.winner === bot.id ? "border-2 border-amber-400 shadow-lg" : ""}
+                    />
+                  ))
+                ) : (
+                  // Show tile backs during gameplay
+                  <>
+                    {bot.hand.slice(0, Math.min(bot.hand.length, 8)).map((_, index) => (
+                      <div
+                        key={index}
+                        className="w-8 h-12 bg-gradient-to-b from-emerald-600 to-emerald-700 rounded border border-emerald-500 flex items-center justify-center"
+                      >
+                        {/* Removed the 🀄 character to avoid confusion with red dragon */}
+                      </div>
+                    ))}
+                    {bot.hand.length > 8 && (
+                      <div className="w-8 h-12 bg-emerald-600/50 rounded border border-emerald-500 flex items-center justify-center">
+                        <span className="text-emerald-200 text-xs">+{bot.hand.length - 8}</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -644,7 +671,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
         {/* Player Hand - Now at the bottom */}
         <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
-          <h3 className="text-white font-medium text-lg mb-4 text-center">Your Hand</h3>
+          <div className="flex items-center justify-center space-x-3 mb-4">
+            <h3 className="text-white font-medium text-lg">Your Hand</h3>
+            {gameState.winner === 'player1' && (
+              <span className="text-amber-400 font-bold text-lg">👑 WINNER!</span>
+            )}
+          </div>
           <div className="flex flex-wrap justify-center gap-2 mb-6">
             {playerHand.hand.map((tile) => (
               <TileComponent
@@ -652,7 +684,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 tile={tile}
                 isSelected={selectedTile === tile.id}
                 onClick={() => handleTileClick(tile.id)}
-                className="transition-all duration-200"
+                className={`transition-all duration-200 ${
+                  gameState.winner === 'player1' ? "border-2 border-amber-400 shadow-lg" : ""
+                }`}
               />
             ))}
           </div>
