@@ -113,6 +113,23 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setBotAction({ type: action, playerName, tiles });
   };
 
+  // Helper function to remove claimed tile from discard pile
+  const removeClaimedTileFromDiscardPile = (discardPile: DiscardedTile[], claimedTile: Tile): DiscardedTile[] => {
+    // Find and remove the most recent matching tile from discard pile
+    const updatedDiscardPile = [...discardPile];
+    for (let i = updatedDiscardPile.length - 1; i >= 0; i--) {
+      const discardedTile = updatedDiscardPile[i];
+      if (discardedTile.tile.type === claimedTile.type &&
+          discardedTile.tile.value === claimedTile.value &&
+          discardedTile.tile.dragon === claimedTile.dragon &&
+          discardedTile.tile.wind === claimedTile.wind) {
+        updatedDiscardPile.splice(i, 1);
+        break;
+      }
+    }
+    return updatedDiscardPile;
+  };
+
   // Bot AI logic
   const makeBotMove = useCallback((botPlayer: Player, gameState: GameState) => {
     const { wall, discardPile } = gameState;
@@ -212,6 +229,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         // Show win indicator with winning tiles
         showBotAction('win', player.name, testHand.slice(-4)); // Show last 4 tiles as example
         
+        // Remove claimed tile from discard pile
+        const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
+        
         return {
           ...gameState,
           gamePhase: 'finished' as const,
@@ -219,6 +239,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           winType: 'claimed' as const,
           winScore,
           currentPlayer: playerIndex,
+          discardPile: updatedDiscardPile,
           players: gameState.players.map(p => 
             p.id === player.id 
               ? { ...p, hand: testHand, score: p.score + winScore }
@@ -236,9 +257,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         // Show kong indicator with all 4 tiles
         showBotAction('kong', player.name, [discardedTile.tile, ...kongTiles]);
         
+        // Remove claimed tile from discard pile
+        const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
+        
         return {
           ...gameState,
           currentPlayer: playerIndex,
+          discardPile: updatedDiscardPile,
           players: gameState.players.map(p => 
             p.id === player.id 
               ? { ...p, hand: newHand, exposedSets: newExposedSets }
@@ -256,9 +281,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         // Show pung indicator with all 3 tiles
         showBotAction('pung', player.name, [discardedTile.tile, ...pungTiles]);
         
+        // Remove claimed tile from discard pile
+        const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
+        
         return {
           ...gameState,
           currentPlayer: playerIndex,
+          discardPile: updatedDiscardPile,
           players: gameState.players.map(p => 
             p.id === player.id 
               ? { ...p, hand: newHand, exposedSets: newExposedSets }
@@ -279,9 +308,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           const sequenceTiles = [discardedTile.tile, ...chowTiles].sort((a, b) => (a.value || 0) - (b.value || 0));
           showBotAction('chow', player.name, sequenceTiles);
           
+          // Remove claimed tile from discard pile
+          const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
+          
           return {
             ...gameState,
             currentPlayer: playerIndex,
+            discardPile: updatedDiscardPile,
             players: gameState.players.map(p => 
               p.id === player.id 
                 ? { ...p, hand: newHand, exposedSets: newExposedSets }
