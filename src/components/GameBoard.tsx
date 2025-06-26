@@ -26,7 +26,7 @@ interface GameBoardProps {
 interface BotAction {
   type: BotActionType;
   playerName: string;
-  tiles?: string[];
+  tiles?: Tile[]; // Changed from string[] to Tile[]
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
@@ -108,8 +108,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     soundManager.setEnabled(soundEnabled);
   }, [soundEnabled, soundManager]);
 
-  // Show bot action indicator
-  const showBotAction = (action: BotActionType, playerName: string, tiles?: string[]) => {
+  // Show bot action indicator with full tile objects
+  const showBotAction = (action: BotActionType, playerName: string, tiles?: Tile[]) => {
     setBotAction({ type: action, playerName, tiles });
   };
 
@@ -128,8 +128,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     if (isWinningHand(newHand, botPlayer.exposedSets)) {
       const winScore = calculateWinScore(newHand, botPlayer.exposedSets, 'self-drawn', botPlayer.isDealer);
       
-      // Show win indicator
-      showBotAction('win', botPlayer.name);
+      // Show win indicator with winning tiles
+      showBotAction('win', botPlayer.name, newHand.slice(-4)); // Show last 4 tiles as example
       
       return {
         ...gameState,
@@ -152,8 +152,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       const newExposedSets = [...botPlayer.exposedSets, [drawnTile, ...kongTiles]];
       const remainingHand = botPlayer.hand.filter(tile => !kongTiles.includes(tile));
       
-      // Show kong indicator
-      showBotAction('kong', botPlayer.name, [drawnTile.unicode, ...kongTiles.map(t => t.unicode)]);
+      // Show kong indicator with all 4 tiles
+      showBotAction('kong', botPlayer.name, [drawnTile, ...kongTiles]);
       
       return {
         ...gameState,
@@ -209,8 +209,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       if (isWinningHand(testHand, player.exposedSets)) {
         const winScore = calculateWinScore(testHand, player.exposedSets, 'claimed', player.isDealer);
         
-        // Show win indicator
-        showBotAction('win', player.name);
+        // Show win indicator with winning tiles
+        showBotAction('win', player.name, testHand.slice(-4)); // Show last 4 tiles as example
         
         return {
           ...gameState,
@@ -233,8 +233,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...kongTiles]];
         const newHand = player.hand.filter(tile => !kongTiles.includes(tile));
         
-        // Show kong indicator
-        showBotAction('kong', player.name, [discardedTile.tile.unicode, ...kongTiles.map(t => t.unicode)]);
+        // Show kong indicator with all 4 tiles
+        showBotAction('kong', player.name, [discardedTile.tile, ...kongTiles]);
         
         return {
           ...gameState,
@@ -253,8 +253,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...pungTiles]];
         const newHand = player.hand.filter(tile => !pungTiles.includes(tile));
         
-        // Show pung indicator
-        showBotAction('pung', player.name, [discardedTile.tile.unicode, ...pungTiles.map(t => t.unicode)]);
+        // Show pung indicator with all 3 tiles
+        showBotAction('pung', player.name, [discardedTile.tile, ...pungTiles]);
         
         return {
           ...gameState,
@@ -275,8 +275,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...chowTiles]];
           const newHand = player.hand.filter(tile => !chowTiles.includes(tile));
           
-          // Show chow indicator
-          showBotAction('chow', player.name, [discardedTile.tile.unicode, ...chowTiles.map(t => t.unicode)]);
+          // Show chow indicator with all 3 tiles in sequence
+          const sequenceTiles = [discardedTile.tile, ...chowTiles].sort((a, b) => (a.value || 0) - (b.value || 0));
+          showBotAction('chow', player.name, sequenceTiles);
           
           return {
             ...gameState,

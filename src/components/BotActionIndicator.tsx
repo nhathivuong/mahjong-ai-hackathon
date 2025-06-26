@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Zap, Square, Users, Trophy } from 'lucide-react';
+import TileComponent from './TileComponent';
+import { Tile } from '../types/mahjong';
 
 export type BotActionType = 'chow' | 'pung' | 'kong' | 'win';
 
 interface BotActionIndicatorProps {
   action: BotActionType;
   playerName: string;
-  tiles?: string[]; // For showing which tiles were involved
+  tiles?: Tile[]; // Changed from string[] to Tile[] for full tile objects
   onComplete?: () => void;
   duration?: number;
 }
@@ -83,7 +85,7 @@ const BotActionIndicator: React.FC<BotActionIndicatorProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
       {/* Backdrop */}
       <div 
-        className={`absolute inset-0 bg-black/30 transition-opacity duration-300 ${
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${
           isAnimating ? 'opacity-100' : 'opacity-0'
         }`} 
       />
@@ -98,7 +100,7 @@ const BotActionIndicator: React.FC<BotActionIndicatorProps> = ({
       >
         <div className={`
           ${config.bgColor} ${config.borderColor} backdrop-blur-sm 
-          border-2 rounded-2xl p-6 sm:p-8 max-w-sm mx-4
+          border-2 rounded-2xl p-6 sm:p-8 max-w-md mx-4
           shadow-2xl
         `}>
           {/* Icon and Action */}
@@ -122,7 +124,7 @@ const BotActionIndicator: React.FC<BotActionIndicatorProps> = ({
           </div>
 
           {/* Player Name */}
-          <div className="text-center mb-4">
+          <div className="text-center mb-6">
             <div className="bg-white/10 rounded-lg px-4 py-2 inline-block">
               <p className="text-white font-medium text-lg">
                 {playerName}
@@ -130,23 +132,44 @@ const BotActionIndicator: React.FC<BotActionIndicatorProps> = ({
             </div>
           </div>
 
-          {/* Tiles Involved (if any) */}
+          {/* Full Tiles Display */}
           {tiles.length > 0 && (
             <div className="text-center">
-              <p className="text-emerald-200 text-sm mb-2">Tiles involved:</p>
-              <div className="flex justify-center space-x-1">
-                {tiles.slice(0, 4).map((tile, index) => (
+              <p className="text-emerald-200 text-sm mb-3">Tiles involved:</p>
+              <div className="flex justify-center items-center gap-2 flex-wrap">
+                {tiles.map((tile, index) => (
                   <div 
                     key={index}
-                    className="w-8 h-10 bg-white/90 rounded border text-xs flex items-center justify-center font-bold text-gray-800"
+                    className={`transform transition-all duration-300 ${
+                      isAnimating ? 'animate-bounce' : ''
+                    }`}
+                    style={{ 
+                      animationDelay: `${index * 100}ms`,
+                      animationDuration: '1s'
+                    }}
                   >
-                    {tile}
+                    <TileComponent
+                      tile={tile}
+                      height="compact"
+                      className="shadow-lg border-2 border-white/30 hover:scale-110 transition-transform duration-200"
+                    />
                   </div>
                 ))}
-                {tiles.length > 4 && (
-                  <div className="w-8 h-10 bg-white/70 rounded border text-xs flex items-center justify-center font-bold text-gray-600">
-                    +{tiles.length - 4}
-                  </div>
+              </div>
+              
+              {/* Action Type Explanation */}
+              <div className="mt-4 text-xs text-emerald-300">
+                {action === 'chow' && tiles.length >= 3 && (
+                  <p>Sequence: {tiles.map(t => t.unicode).join(' → ')}</p>
+                )}
+                {action === 'pung' && tiles.length >= 3 && (
+                  <p>Triplet: Three {tiles[0].unicode} tiles</p>
+                )}
+                {action === 'kong' && tiles.length >= 4 && (
+                  <p>Quad: Four {tiles[0].unicode} tiles</p>
+                )}
+                {action === 'win' && (
+                  <p>Winning hand completed!</p>
                 )}
               </div>
             </div>
@@ -154,9 +177,9 @@ const BotActionIndicator: React.FC<BotActionIndicatorProps> = ({
 
           {/* Progress Bar */}
           <div className="mt-6">
-            <div className="w-full bg-white/20 rounded-full h-1">
+            <div className="w-full bg-white/20 rounded-full h-1.5">
               <div 
-                className={`bg-white h-1 rounded-full transition-all duration-${duration} ease-linear ${
+                className={`bg-gradient-to-r ${config.color} h-1.5 rounded-full transition-all duration-${duration} ease-linear ${
                   isAnimating ? 'w-0' : 'w-full'
                 }`}
                 style={{ 
