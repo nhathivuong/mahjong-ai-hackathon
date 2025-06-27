@@ -467,7 +467,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           players: gameState.players.map(p => 
             p.id === player.id 
               ? { ...p, hand: newHand, exposedSets: newExposedSets }
-              : p
+            : p
           )
         };
       }
@@ -493,7 +493,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             players: gameState.players.map(p => 
               p.id === player.id 
                 ? { ...p, hand: newHand, exposedSets: newExposedSets }
-                : p
+              : p
             )
           };
         }
