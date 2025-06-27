@@ -671,9 +671,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     return () => clearTimeout(timer);
   }, [gameState?.currentPlayer, gameState?.lastActionWasClaim, isFirstMove]);
 
-  // Bot turn processing
+  // Bot turn processing - PAUSE when modals are active
   useEffect(() => {
     if (!gameState || gameState.gamePhase !== 'playing') return;
+
+    // CRITICAL: Pause bot processing when player action modals are active
+    if (showClaimDialog || botAction) return;
 
     const currentPlayer = gameState.players[gameState.currentPlayer];
     
@@ -739,7 +742,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
       return () => clearTimeout(timer);
     }
-  }, [gameState, makeBotMove, soundManager, checkBotClaims]);
+  }, [gameState, makeBotMove, soundManager, checkBotClaims, showClaimDialog, botAction]);
 
   // Auto-close claim dialog after timeout
   useEffect(() => {
