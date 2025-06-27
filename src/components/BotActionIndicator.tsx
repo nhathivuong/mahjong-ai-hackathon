@@ -18,10 +18,28 @@ const BotActionIndicator: React.FC<BotActionIndicatorProps> = ({
   playerName,
   tiles = [],
   onComplete,
-  duration = 3000
+  duration // Will be set based on action type
 }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [isAnimating, setIsAnimating] = useState(true);
+
+  // Set different durations based on action type
+  const getActionDuration = (actionType: BotActionType): number => {
+    switch (actionType) {
+      case 'win':
+        return 4000; // Keep win longer for celebration
+      case 'kong':
+        return 1500; // Shorter for claims
+      case 'pung':
+        return 1200; // Even shorter for pung
+      case 'chow':
+        return 1000; // Shortest for chow (most common)
+      default:
+        return 2000;
+    }
+  };
+
+  const actualDuration = duration || getActionDuration(action);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -29,11 +47,11 @@ const BotActionIndicator: React.FC<BotActionIndicatorProps> = ({
       setTimeout(() => {
         setIsVisible(false);
         onComplete?.();
-      }, 300);
-    }, duration);
+      }, 200); // Faster fade out
+    }, actualDuration);
 
     return () => clearTimeout(timer);
-  }, [duration, onComplete]);
+  }, [actualDuration, onComplete]);
 
   const getActionConfig = (action: BotActionType) => {
     switch (action) {
@@ -83,69 +101,72 @@ const BotActionIndicator: React.FC<BotActionIndicatorProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-      {/* Backdrop */}
+      {/* Backdrop - lighter for claims */}
       <div 
-        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${
-          isAnimating ? 'opacity-100' : 'opacity-0'
-        }`} 
+        className={`absolute inset-0 transition-opacity duration-200 ${
+          action === 'win' ? 'bg-black/40' : 'bg-black/20'
+        } ${isAnimating ? 'opacity-100' : 'opacity-0'}`} 
       />
       
-      {/* Action Card */}
+      {/* Action Card - smaller for claims */}
       <div 
-        className={`relative transform transition-all duration-500 ${
+        className={`relative transform transition-all duration-300 ${
           isAnimating 
             ? 'scale-100 opacity-100 translate-y-0' 
-            : 'scale-95 opacity-0 translate-y-4'
+            : 'scale-95 opacity-0 translate-y-2'
         }`}
       >
         <div className={`
           ${config.bgColor} ${config.borderColor} backdrop-blur-sm 
-          border-2 rounded-2xl p-6 sm:p-8 max-w-md mx-4
-          shadow-2xl
+          border-2 rounded-2xl shadow-2xl
+          ${action === 'win' ? 'p-6 sm:p-8 max-w-md' : 'p-4 sm:p-6 max-w-sm'} mx-4
         `}>
-          {/* Icon and Action */}
-          <div className="text-center mb-4">
+          {/* Icon and Action - smaller for claims */}
+          <div className="text-center mb-3">
             <div className={`
-              w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 rounded-full 
+              ${action === 'win' ? 'w-16 h-16 sm:w-20 sm:h-20' : 'w-12 h-12 sm:w-14 sm:h-14'} 
+              mx-auto mb-3 rounded-full 
               bg-gradient-to-br ${config.color} 
               flex items-center justify-center shadow-lg
-              ${isAnimating ? 'animate-pulse' : ''}
+              ${isAnimating && action !== 'win' ? 'animate-pulse' : ''}
             `}>
-              <IconComponent className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+              <IconComponent className={`${action === 'win' ? 'w-8 h-8 sm:w-10 sm:h-10' : 'w-6 h-6 sm:w-7 sm:h-7'} text-white`} />
             </div>
             
-            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
+            <h2 className={`font-bold text-white mb-2 ${action === 'win' ? 'text-2xl sm:text-3xl' : 'text-xl sm:text-2xl'}`}>
               {config.label}
             </h2>
             
-            <p className="text-emerald-200 text-sm sm:text-base">
+            <p className={`text-emerald-200 ${action === 'win' ? 'text-sm sm:text-base' : 'text-xs sm:text-sm'}`}>
               {config.description}
             </p>
           </div>
 
-          {/* Player Name */}
-          <div className="text-center mb-6">
-            <div className="bg-white/10 rounded-lg px-4 py-2 inline-block">
-              <p className="text-white font-medium text-lg">
+          {/* Player Name - smaller for claims */}
+          <div className="text-center mb-4">
+            <div className="bg-white/10 rounded-lg px-3 py-1.5 inline-block">
+              <p className={`text-white font-medium ${action === 'win' ? 'text-lg' : 'text-base'}`}>
                 {playerName}
               </p>
             </div>
           </div>
 
-          {/* Full Tiles Display */}
+          {/* Tiles Display - more compact for claims */}
           {tiles.length > 0 && (
             <div className="text-center">
-              <p className="text-emerald-200 text-sm mb-3">Tiles involved:</p>
-              <div className="flex justify-center items-center gap-2 flex-wrap">
+              <p className={`text-emerald-200 mb-2 ${action === 'win' ? 'text-sm' : 'text-xs'}`}>
+                Tiles involved:
+              </p>
+              <div className="flex justify-center items-center gap-1 flex-wrap">
                 {tiles.map((tile, index) => (
                   <div 
                     key={index}
-                    className={`transform transition-all duration-300 ${
-                      isAnimating ? 'animate-bounce' : ''
+                    className={`transform transition-all duration-200 ${
+                      isAnimating && action !== 'win' ? 'animate-bounce' : ''
                     }`}
                     style={{ 
-                      animationDelay: `${index * 100}ms`,
-                      animationDuration: '1s'
+                      animationDelay: `${index * 50}ms`, // Faster animation
+                      animationDuration: action === 'win' ? '1s' : '0.6s'
                     }}
                   >
                     <TileComponent
@@ -157,8 +178,8 @@ const BotActionIndicator: React.FC<BotActionIndicatorProps> = ({
                 ))}
               </div>
               
-              {/* Action Type Explanation */}
-              <div className="mt-4 text-xs text-emerald-300">
+              {/* Action Type Explanation - smaller text for claims */}
+              <div className={`mt-3 text-emerald-300 ${action === 'win' ? 'text-xs' : 'text-[10px]'}`}>
                 {action === 'chow' && tiles.length >= 3 && (
                   <p>Sequence: {tiles.map(t => t.unicode).join(' → ')}</p>
                 )}
@@ -175,15 +196,15 @@ const BotActionIndicator: React.FC<BotActionIndicatorProps> = ({
             </div>
           )}
 
-          {/* Progress Bar */}
-          <div className="mt-6">
-            <div className="w-full bg-white/20 rounded-full h-1.5">
+          {/* Progress Bar - faster for claims */}
+          <div className={`${action === 'win' ? 'mt-6' : 'mt-4'}`}>
+            <div className="w-full bg-white/20 rounded-full h-1">
               <div 
-                className={`bg-gradient-to-r ${config.color} h-1.5 rounded-full transition-all duration-${duration} ease-linear ${
+                className={`bg-gradient-to-r ${config.color} h-1 rounded-full transition-all ease-linear ${
                   isAnimating ? 'w-0' : 'w-full'
                 }`}
                 style={{ 
-                  animation: isAnimating ? `progress ${duration}ms linear` : 'none' 
+                  animation: isAnimating ? `progress ${actualDuration}ms linear` : 'none' 
                 }}
               />
             </div>
