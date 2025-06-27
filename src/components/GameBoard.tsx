@@ -314,7 +314,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     // Normal turn flow - draw then discard
     if (wall.length === 0) return gameState;
 
-    // Draw a tile
+    // Draw a tile first (normal turn sequence)
     const drawnTile = wall[0];
     const newWall = wall.slice(1);
     const newHand = [...botPlayer.hand, drawnTile];
@@ -361,7 +361,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       };
     }
 
-    // Simple discard logic
+    // Normal discard after drawing
     const tileToDiscard = chooseBotDiscard(newHand, botPlayer.exposedSets);
     const finalHand = newHand.filter(tile => tile.id !== tileToDiscard.id);
 
@@ -603,7 +603,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     soundManager.playTileSound('discard', 'bottom');
   };
 
-  // Handle draw tile
+  // Handle draw tile - now automatic for normal turns
   const handleDrawTile = () => {
     if (!gameState || gameState.currentPlayer !== 0 || gameState.wall.length === 0) {
       return;
@@ -657,6 +657,19 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
     soundManager.playTileSound('draw', 'center');
   };
+
+  // Auto-draw for player on their turn (except first move and after claims)
+  useEffect(() => {
+    if (!gameState || gameState.gamePhase !== 'playing' || gameState.currentPlayer !== 0) return;
+    if (isFirstMove || gameState.lastActionWasClaim || gameState.wall.length === 0) return;
+
+    // Auto-draw after a short delay to show turn transition
+    const timer = setTimeout(() => {
+      handleDrawTile();
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [gameState?.currentPlayer, gameState?.lastActionWasClaim, isFirstMove]);
 
   // Bot turn processing
   useEffect(() => {
@@ -752,6 +765,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const canDraw = gameState.currentPlayer === 0 && gameState.wall.length > 0 && !isFirstMove && !gameState.lastActionWasClaim;
   const canDiscard = gameState.currentPlayer === 0 && selectedTile !== null;
   const isGameFinished = gameState.gamePhase === 'finished' || gameState.gamePhase === 'draw';
+  const isPlayerTurn = gameState.currentPlayer === 0;
+  const needsToDrawFirst = isPlayerTurn && !isFirstMove && !gameState.lastActionWasClaim && playerHand.hand.length === 13;
 
   return (
     <div className="min-h-screen p-4">
@@ -849,6 +864,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 <span className="text-blue-200 font-medium text-sm">After claim: Must discard</span>
               </div>
             )}
+            {needsToDrawFirst && (
+              <div className="bg-green-500/20 backdrop-blur-sm border border-green-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
+                <span className="text-green-200 font-medium text-sm">Drawing tile...</span>
+              </div>
+            )}
             {isGameFinished && (
               <div className="bg-amber-500/20 backdrop-blur-sm border border-amber-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
                 <Eye className="w-4 h-4 text-amber-400" />
@@ -883,9 +903,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 <span className="text-white font-medium text-lg">
                   {currentPlayer.isBot ? `${currentPlayer.name} is thinking...` : 
                    isFirstMove ? "Your turn - Must discard a tile first" : 
-                   gameState.lastActionWasClaim ? "Your turn - Must discard after claim" : "Your turn"}
+                   gameState.lastActionWasClaim ? "Your turn - Must discard after claim" : 
+                   needsToDrawFirst ? "Drawing tile automatically..." : "Your turn - Select tile to discard"}
                 </span>
-                {currentPlayer.isBot && <Clock className="w-4 h-4 text-emerald-300 animate-spin" />}
+                {(currentPlayer.isBot || needsToDrawFirst) && <Clock className="w-4 h-4 text-emerald-300 animate-spin" />}
               </div>
             </div>
           </div>
@@ -995,7 +1016,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         {/* Player Hand */}
         <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
           <div className="flex items-center justify-center space-x-3 mb-4">
-            <h3 className="text-white font-medium text-lg">Your Hand</h3>
+            <h3 className="text-white font-medium text-lg">Your Hand ({playerHand.hand.length} tiles)</h3>
             {gameState.winner === 'player1' && (
               <span className="text-amber-400 font-bold text-lg">👑 WINNER!</span>
             )}
@@ -1015,26 +1036,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
 
           {/* Player Actions */}
-          {gameState.gamePhase === 'playing' && gameState.currentPlayer === 0 && (
+          {gameState.gamePhase === 'playing' && gameState.currentPlayer === 0 && !needsToDrawFirst && (
             <div className="flex justify-center space-x-4 mb-6">
-              <button
-                onClick={handleDrawTile}
-                disabled={!canDraw}
-                className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
-                  canDraw
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl hover:scale-105'
-                    : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                }`}
-                title={
-                  isFirstMove ? "Must discard a tile first" : 
-                  gameState.lastActionWasClaim ? "Cannot draw after claim - must discard" :
-                  `Draw from wall (${gameState.wall.length} tiles left)`
-                }
-              >
-                {isFirstMove ? "Draw Disabled" : 
-                 gameState.lastActionWasClaim ? "Draw Disabled (After Claim)" :
-                 `Draw Tile (${gameState.wall.length} left)`}
-              </button>
               <button
                 onClick={handleDiscard}
                 disabled={!canDiscard}
@@ -1057,8 +1060,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               <div className="text-center">
                 <p className="text-amber-200 font-medium mb-2">🎯 First Move Rules</p>
                 <p className="text-emerald-200 text-sm">
-                  As the dealer, you start with 14 tiles. You must discard one tile before you can draw from the wall.
-                  Select a tile from your hand and click "Discard Selected" to begin the game.
+                  As the dealer, you start with 14 tiles. You must discard one tile to begin the game.
+                  After this, you'll automatically draw a tile at the start of each turn.
                 </p>
               </div>
             </div>
@@ -1072,6 +1075,18 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 <p className="text-emerald-200 text-sm">
                   You just made a claim (chow, pung, or kong). According to classical Mahjong rules, 
                   you must discard a tile immediately without drawing from the wall.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Normal Turn Instructions */}
+          {!isFirstMove && !gameState.lastActionWasClaim && gameState.currentPlayer === 0 && gameState.gamePhase === 'playing' && !needsToDrawFirst && (
+            <div className="bg-green-500/10 border border-green-400/30 rounded-lg p-4 mb-4">
+              <div className="text-center">
+                <p className="text-green-200 font-medium mb-2">🎯 Normal Turn</p>
+                <p className="text-emerald-200 text-sm">
+                  You automatically drew a tile at the start of your turn. Now select a tile to discard.
                 </p>
               </div>
             </div>
