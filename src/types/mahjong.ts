@@ -41,4 +41,5 @@ export interface GameState {
   finalScores?: number[];
   winType?: 'self-drawn' | 'claimed';
   winScore?: number;
+  lastActionWasClaim?: boolean; // New flag to track if last action was a claim
 }

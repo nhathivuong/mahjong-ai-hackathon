@@ -101,7 +101,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       discardPile: [],
       round: 1,
       gamePhase: 'playing',
-      turnNumber: 1
+      turnNumber: 1,
+      lastActionWasClaim: false // Initialize claim flag
     };
 
     setGameState(newGameState);
@@ -226,6 +227,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         winType: 'claimed',
         winScore,
         discardPile: updatedDiscardPile,
+        lastActionWasClaim: false, // Reset claim flag on win
         players: gameState.players.map(p => 
           p.id === player.id 
             ? { ...p, hand: testHand, score: p.score + winScore }
@@ -244,6 +246,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         ...gameState,
         currentPlayer: 0, // Player gets the turn after claiming
         discardPile: updatedDiscardPile,
+        lastActionWasClaim: true, // Set claim flag - player must discard next
         players: gameState.players.map(p => 
           p.id === player.id 
             ? { ...p, hand: newHand, exposedSets: newExposedSets }
@@ -279,6 +282,36 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const makeBotMove = useCallback((botPlayer: Player, gameState: GameState) => {
     const { wall, discardPile } = gameState;
     
+    // Check if this turn is after a claim - if so, skip drawing and go straight to discard
+    if (gameState.lastActionWasClaim) {
+      // Bot must discard immediately after claiming, no drawing allowed
+      const tileToDiscard = chooseBotDiscard(botPlayer.hand, botPlayer.exposedSets);
+      const finalHand = botPlayer.hand.filter(tile => tile.id !== tileToDiscard.id);
+
+      const newDiscardPile: DiscardedTile[] = [
+        ...discardPile,
+        {
+          tile: tileToDiscard,
+          playerId: botPlayer.id,
+          playerName: botPlayer.name,
+          turnNumber: gameState.turnNumber
+        }
+      ];
+
+      return {
+        ...gameState,
+        discardPile: newDiscardPile,
+        turnNumber: gameState.turnNumber + 1,
+        lastActionWasClaim: false, // Reset claim flag after discard
+        players: gameState.players.map(p => 
+          p.id === botPlayer.id 
+            ? { ...p, hand: finalHand }
+            : p
+        )
+      };
+    }
+
+    // Normal turn flow - draw then discard
     if (wall.length === 0) return gameState;
 
     // Draw a tile
@@ -299,6 +332,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         winType: 'self-drawn' as const,
         winScore,
         wall: newWall,
+        lastActionWasClaim: false, // Reset claim flag on win
         players: gameState.players.map(p => 
           p.id === botPlayer.id 
             ? { ...p, hand: newHand, score: p.score + winScore }
@@ -318,6 +352,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       return {
         ...gameState,
         wall: newWall,
+        lastActionWasClaim: true, // Bot must discard next turn without drawing
         players: gameState.players.map(p => 
           p.id === botPlayer.id 
             ? { ...p, hand: remainingHand, exposedSets: newExposedSets }
@@ -345,6 +380,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       wall: newWall,
       discardPile: newDiscardPile,
       turnNumber: gameState.turnNumber + 1,
+      lastActionWasClaim: false, // Normal turn, no claim involved
       players: gameState.players.map(p => 
         p.id === botPlayer.id 
           ? { ...p, hand: finalHand }
@@ -381,6 +417,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           winScore,
           currentPlayer: playerIndex,
           discardPile: updatedDiscardPile,
+          lastActionWasClaim: false, // Reset claim flag on win
           players: gameState.players.map(p => 
             p.id === player.id 
               ? { ...p, hand: testHand, score: p.score + winScore }
@@ -403,6 +440,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           ...gameState,
           currentPlayer: playerIndex,
           discardPile: updatedDiscardPile,
+          lastActionWasClaim: true, // Bot must discard next without drawing
           players: gameState.players.map(p => 
             p.id === player.id 
               ? { ...p, hand: newHand, exposedSets: newExposedSets }
@@ -425,6 +463,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           ...gameState,
           currentPlayer: playerIndex,
           discardPile: updatedDiscardPile,
+          lastActionWasClaim: true, // Bot must discard next without drawing
           players: gameState.players.map(p => 
             p.id === player.id 
               ? { ...p, hand: newHand, exposedSets: newExposedSets }
@@ -450,6 +489,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             ...gameState,
             currentPlayer: playerIndex,
             discardPile: updatedDiscardPile,
+            lastActionWasClaim: true, // Bot must discard next without drawing
             players: gameState.players.map(p => 
               p.id === player.id 
                 ? { ...p, hand: newHand, exposedSets: newExposedSets }
@@ -535,6 +575,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       discardPile: newDiscardPile,
       turnNumber: gameState.turnNumber + 1,
       currentPlayer: 1,
+      lastActionWasClaim: false, // Reset claim flag after player discard
       players: gameState.players.map(p => 
         p.id === player.id ? { ...p, hand: newHand } : p
       )
@@ -568,6 +609,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       return;
     }
 
+    // Check if player just made a claim - if so, they cannot draw
+    if (gameState.lastActionWasClaim) {
+      soundManager.playErrorSound();
+      return;
+    }
+
     if (isFirstMove) {
       soundManager.playErrorSound();
       return;
@@ -588,6 +635,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         winType: 'self-drawn',
         winScore,
         wall: newWall,
+        lastActionWasClaim: false, // Reset claim flag on win
         players: gameState.players.map(p => 
           p.id === player.id 
             ? { ...p, hand: newHand, score: p.score + winScore }
@@ -701,7 +749,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   const currentPlayer = gameState.players[gameState.currentPlayer];
   const playerHand = gameState.players[0];
-  const canDraw = gameState.currentPlayer === 0 && gameState.wall.length > 0 && !isFirstMove;
+  const canDraw = gameState.currentPlayer === 0 && gameState.wall.length > 0 && !isFirstMove && !gameState.lastActionWasClaim;
   const canDiscard = gameState.currentPlayer === 0 && selectedTile !== null;
   const isGameFinished = gameState.gamePhase === 'finished' || gameState.gamePhase === 'draw';
 
@@ -796,6 +844,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 <span className="text-amber-200 font-medium text-sm">First move: Must discard</span>
               </div>
             )}
+            {gameState.lastActionWasClaim && gameState.currentPlayer === 0 && (
+              <div className="bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
+                <span className="text-blue-200 font-medium text-sm">After claim: Must discard</span>
+              </div>
+            )}
             {isGameFinished && (
               <div className="bg-amber-500/20 backdrop-blur-sm border border-amber-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
                 <Eye className="w-4 h-4 text-amber-400" />
@@ -829,7 +882,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 <Users className="w-5 h-5 text-emerald-300" />
                 <span className="text-white font-medium text-lg">
                   {currentPlayer.isBot ? `${currentPlayer.name} is thinking...` : 
-                   isFirstMove ? "Your turn - Must discard a tile first" : "Your turn"}
+                   isFirstMove ? "Your turn - Must discard a tile first" : 
+                   gameState.lastActionWasClaim ? "Your turn - Must discard after claim" : "Your turn"}
                 </span>
                 {currentPlayer.isBot && <Clock className="w-4 h-4 text-emerald-300 animate-spin" />}
               </div>
@@ -971,9 +1025,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                     ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl hover:scale-105'
                     : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                 }`}
-                title={isFirstMove ? "Must discard a tile first" : `Draw from wall (${gameState.wall.length} tiles left)`}
+                title={
+                  isFirstMove ? "Must discard a tile first" : 
+                  gameState.lastActionWasClaim ? "Cannot draw after claim - must discard" :
+                  `Draw from wall (${gameState.wall.length} tiles left)`
+                }
               >
-                {isFirstMove ? "Draw Disabled" : `Draw Tile (${gameState.wall.length} left)`}
+                {isFirstMove ? "Draw Disabled" : 
+                 gameState.lastActionWasClaim ? "Draw Disabled (After Claim)" :
+                 `Draw Tile (${gameState.wall.length} left)`}
               </button>
               <button
                 onClick={handleDiscard}
@@ -984,7 +1044,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                     : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                 }`}
               >
-                {isFirstMove ? "Discard Selected (Required)" : "Discard Selected"}
+                {isFirstMove ? "Discard Selected (Required)" : 
+                 gameState.lastActionWasClaim ? "Discard Selected (Required After Claim)" :
+                 "Discard Selected"}
               </button>
             </div>
           )}
@@ -997,6 +1059,19 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 <p className="text-emerald-200 text-sm">
                   As the dealer, you start with 14 tiles. You must discard one tile before you can draw from the wall.
                   Select a tile from your hand and click "Discard Selected" to begin the game.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* After Claim Instructions */}
+          {gameState.lastActionWasClaim && gameState.currentPlayer === 0 && gameState.gamePhase === 'playing' && (
+            <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg p-4 mb-4">
+              <div className="text-center">
+                <p className="text-blue-200 font-medium mb-2">🎯 After Claim Rules</p>
+                <p className="text-emerald-200 text-sm">
+                  You just made a claim (chow, pung, or kong). According to classical Mahjong rules, 
+                  you must discard a tile immediately without drawing from the wall.
                 </p>
               </div>
             </div>
