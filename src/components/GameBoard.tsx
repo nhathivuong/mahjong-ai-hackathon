@@ -447,7 +447,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           players: gameState.players.map(p => 
             p.id === player.id 
               ? { ...p, hand: newHand, exposedSets: newExposedSets }
-              : p
+            : p
           )
         };
       }
@@ -854,9 +854,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         {/* Game Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div className="flex items-center space-x-4">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
-              <span className="text-white font-medium">Round {gameState.round}</span>
-            </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
               <span className="text-white font-medium">Turn {gameState.turnNumber}</span>
             </div>
