@@ -209,9 +209,9 @@ export const canFormKong = (hand: Tile[], discardedTile: Tile): Tile[] | null =>
   return matchingTiles.length >= 3 ? matchingTiles.slice(0, 3) : null;
 };
 
-// FIXED: Enhanced winning hand detection with proper mahjong rules
+// FIXED: Enhanced winning hand detection with proper kong handling
 export const isWinningHand = (hand: Tile[], exposedSets: Tile[][] = []): boolean => {
-  // CRITICAL FIX: Calculate total tiles correctly
+  // Calculate total tiles correctly - kongs have 4 tiles but count as 1 set
   const handTileCount = hand.length;
   const exposedTileCount = exposedSets.reduce((total, set) => total + set.length, 0);
   const totalTiles = handTileCount + exposedTileCount;
@@ -219,7 +219,7 @@ export const isWinningHand = (hand: Tile[], exposedSets: Tile[][] = []): boolean
   // Must have exactly 14 tiles for a winning hand
   if (totalTiles !== 14) return false;
   
-  // FIXED: Check if we have the correct number of sets
+  // Count exposed sets properly - each kong (4 tiles) counts as 1 set
   const exposedSetCount = exposedSets.length;
   const remainingSetsNeeded = 4 - exposedSetCount;
   
@@ -299,7 +299,7 @@ const checkThirteenOrphans = (groups: Tile[][]): boolean => {
   return counts.join(',') === '1,1,1,1,1,1,1,1,1,1,1,1,2';
 };
 
-// FIXED: Check standard winning pattern with proper set counting
+// FIXED: Check standard winning pattern with proper kong handling
 const checkStandardWinningPattern = (groups: Tile[][], remainingSetsNeeded: number): boolean => {
   // Find pairs (exactly one needed)
   const pairs = groups.filter(group => group.length === 2);
@@ -312,13 +312,24 @@ const checkStandardWinningPattern = (groups: Tile[][], remainingSetsNeeded: numb
   return canFormSets(nonPairGroups, remainingSetsNeeded);
 };
 
-// Recursively check if tiles can form the required number of sets
+// FIXED: Recursively check if tiles can form sets, with proper kong handling
 const canFormSets = (groups: Tile[][], setsNeeded: number): boolean => {
   if (setsNeeded === 0) {
     return groups.every(group => group.length === 0);
   }
   
-  // Try to form a triplet
+  // Try to form a kong first (4 identical tiles = 1 set)
+  for (let i = 0; i < groups.length; i++) {
+    if (groups[i].length >= 4) {
+      const newGroups = [...groups];
+      newGroups[i] = newGroups[i].slice(4); // Remove 4 tiles for kong
+      if (canFormSets(newGroups.filter(g => g.length > 0), setsNeeded - 1)) {
+        return true;
+      }
+    }
+  }
+  
+  // Try to form a triplet (3 identical tiles = 1 set)
   for (let i = 0; i < groups.length; i++) {
     if (groups[i].length >= 3) {
       const newGroups = [...groups];
@@ -391,7 +402,7 @@ export const isOneAwayFromWin = (hand: Tile[], exposedSets: Tile[][] = []): Tile
   return winningTiles;
 };
 
-// Calculate hand score for different winning conditions
+// FIXED: Calculate hand score with proper kong recognition
 export const calculateWinScore = (
   hand: Tile[], 
   exposedSets: Tile[][] = [], 
@@ -423,6 +434,20 @@ export const calculateWinScore = (
     baseScore = 8;
   }
   
+  // Kong bonus - each kong adds significant points
+  const kongs = exposedSets.filter(set => set.length === 4);
+  const concealedKongs = groups.filter(group => group.length === 4);
+  
+  // Exposed kongs
+  kongs.forEach(() => {
+    multiplier *= 1.5;
+  });
+  
+  // Concealed kongs (higher bonus)
+  concealedKongs.forEach(() => {
+    multiplier *= 2;
+  });
+  
   // All same suit
   const suits = new Set(allTiles.filter(t => t.type !== 'dragon' && t.type !== 'wind').map(t => t.type));
   if (suits.size === 1) {
@@ -435,7 +460,7 @@ export const calculateWinScore = (
     multiplier *= 3;
   }
   
-  // Concealed hand bonus
+  // Concealed hand bonus (no exposed sets)
   if (exposedSets.length === 0) {
     multiplier *= 2;
   }
@@ -480,6 +505,10 @@ export const calculateDrawScores = (players: { hand: Tile[], exposedSets: Tile[]
     // Bonus for exposed sets
     score += player.exposedSets.length * 5;
     
+    // Bonus for kongs (4-tile sets)
+    const kongs = player.exposedSets.filter(set => set.length === 4);
+    score += kongs.length * 10;
+    
     // Bonus for honor tiles
     const honorTiles = allTiles.filter(tile => tile.type === 'dragon' || tile.type === 'wind');
     score += honorTiles.length * 2;
@@ -519,6 +548,10 @@ export const calculateHandValue = (hand: Tile[], exposedSets: Tile[][]): number 
   
   // Bonus for exposed sets (melds)
   score += exposedSets.length * 5;
+  
+  // Special bonus for kongs (4-tile sets)
+  const kongs = exposedSets.filter(set => set.length === 4);
+  score += kongs.length * 15;
   
   // Bonus for honor tiles (dragons and winds)
   const honorTiles = allTiles.filter(tile => tile.type === 'dragon' || tile.type === 'wind');
