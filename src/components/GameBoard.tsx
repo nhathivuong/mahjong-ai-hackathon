@@ -102,9 +102,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       currentPlayer: 0,
       wall: tiles.slice(53),
       discardPile: [],
-      round: 1,
-      gamePhase: 'playing',
       turnNumber: 1,
+      gamePhase: 'playing',
       lastActionWasClaim: false // Initialize claim flag
     };
 
@@ -145,6 +144,26 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       }
     }
     return updatedDiscardPile;
+  };
+
+  // FIXED: Helper function to properly remove tiles from hand by matching tile properties
+  const removeTilesFromHand = (hand: Tile[], tilesToRemove: Tile[]): Tile[] => {
+    let newHand = [...hand];
+    
+    tilesToRemove.forEach(tileToRemove => {
+      const index = newHand.findIndex(tile => 
+        tile.type === tileToRemove.type &&
+        tile.value === tileToRemove.value &&
+        tile.dragon === tileToRemove.dragon &&
+        tile.wind === tileToRemove.wind
+      );
+      
+      if (index !== -1) {
+        newHand.splice(index, 1);
+      }
+    });
+    
+    return newHand;
   };
 
   // Check if player can claim the discarded tile
@@ -206,7 +225,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     return options;
   };
 
-  // Handle player claim
+  // FIXED: Handle player claim with proper tile removal
   const handlePlayerClaim = (option: ClaimOption) => {
     if (!gameState || !pendingDiscard) return;
 
@@ -240,9 +259,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       
       soundManager.playWinSound();
     } else {
-      // Handle other claims (chow, pung, kong)
-      const tilesToRemove = option.tiles.slice(1); // Remove the discarded tile from the list
-      newHand = player.hand.filter(tile => !tilesToRemove.some(t => t.id === tile.id));
+      // FIXED: Handle other claims (chow, pung, kong) with proper tile removal
+      // The first tile in option.tiles is the discarded tile, the rest are from hand
+      const tilesFromHand = option.tiles.slice(1); // Remove the discarded tile from the list
+      
+      // Remove the matching tiles from hand (not by ID, but by tile properties)
+      newHand = removeTilesFromHand(player.hand, tilesFromHand);
+      
+      // Add the complete set to exposed sets
       newExposedSets.push(option.tiles);
 
       newGameState = {
@@ -252,7 +276,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         lastActionWasClaim: true, // Set claim flag - player must discard next
         players: gameState.players.map(p => 
           p.id === player.id 
-            ? { ...p, hand: newHand, exposedSets: newExposedSets }
+            ? { ...p, hand: sortTiles(newHand), exposedSets: newExposedSets }
             : p
         )
       };
@@ -392,7 +416,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     };
   }, []);
 
-  // Check if any bot can claim the discarded tile
+  // FIXED: Check if any bot can claim the discarded tile with proper tile removal
   const checkBotClaims = useCallback((gameState: GameState, discardedTile: DiscardedTile) => {
     const currentPlayerIndex = gameState.currentPlayer;
     
@@ -433,7 +457,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       const kongTiles = canFormKong(player.hand, discardedTile.tile);
       if (kongTiles && Math.random() > 0.4) {
         const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...kongTiles]];
-        const newHand = player.hand.filter(tile => !kongTiles.includes(tile));
+        const newHand = removeTilesFromHand(player.hand, kongTiles); // FIXED: Use proper tile removal
         
         showBotAction('kong', player.name, [discardedTile.tile, ...kongTiles]);
         
@@ -456,7 +480,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       const pungTiles = canFormPung(player.hand, discardedTile.tile);
       if (pungTiles && Math.random() > 0.5) {
         const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...pungTiles]];
-        const newHand = player.hand.filter(tile => !pungTiles.includes(tile));
+        const newHand = removeTilesFromHand(player.hand, pungTiles); // FIXED: Use proper tile removal
         
         showBotAction('pung', player.name, [discardedTile.tile, ...pungTiles]);
         
@@ -481,7 +505,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         if (chowOptions.length > 0 && Math.random() > 0.6) {
           const chowTiles = chowOptions[0];
           const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...chowTiles]];
-          const newHand = player.hand.filter(tile => !chowTiles.includes(tile));
+          const newHand = removeTilesFromHand(player.hand, chowTiles); // FIXED: Use proper tile removal
           
           const sequenceTiles = [discardedTile.tile, ...chowTiles].sort((a, b) => (a.value || 0) - (b.value || 0));
           showBotAction('chow', player.name, sequenceTiles);
