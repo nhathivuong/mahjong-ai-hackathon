@@ -209,17 +209,34 @@ export const canFormKong = (hand: Tile[], discardedTile: Tile): Tile[] | null =>
   return matchingTiles.length >= 3 ? matchingTiles.slice(0, 3) : null;
 };
 
-// Enhanced winning hand detection with proper mahjong rules
+// FIXED: Enhanced winning hand detection with proper mahjong rules
 export const isWinningHand = (hand: Tile[], exposedSets: Tile[][] = []): boolean => {
-  const allTiles = [...hand, ...exposedSets.flat()];
+  // CRITICAL FIX: Calculate total tiles correctly
+  const handTileCount = hand.length;
+  const exposedTileCount = exposedSets.reduce((total, set) => total + set.length, 0);
+  const totalTiles = handTileCount + exposedTileCount;
   
   // Must have exactly 14 tiles for a winning hand
-  if (allTiles.length !== 14) return false;
+  if (totalTiles !== 14) return false;
   
-  // Create tile frequency map
+  // FIXED: Check if we have the correct number of sets
+  const exposedSetCount = exposedSets.length;
+  const remainingSetsNeeded = 4 - exposedSetCount;
+  
+  // Special case: If we have 4 exposed sets, hand must be exactly a pair (2 tiles)
+  if (exposedSetCount === 4) {
+    if (handTileCount !== 2) return false;
+    // Check if the 2 tiles in hand form a pair
+    return hand[0].type === hand[1].type &&
+           hand[0].value === hand[1].value &&
+           hand[0].dragon === hand[1].dragon &&
+           hand[0].wind === hand[1].wind;
+  }
+  
+  // For hands with fewer exposed sets, check standard patterns
   const tileMap = new Map<string, Tile[]>();
   
-  allTiles.forEach(tile => {
+  hand.forEach(tile => {
     const key = getTileKey(tile);
     if (!tileMap.has(key)) {
       tileMap.set(key, []);
@@ -229,12 +246,14 @@ export const isWinningHand = (hand: Tile[], exposedSets: Tile[][] = []): boolean
 
   const groups = Array.from(tileMap.values());
   
-  // Check for special winning patterns first
-  if (checkSevenPairs(groups)) return true;
-  if (checkThirteenOrphans(groups)) return true;
+  // Check for special winning patterns (only if no exposed sets)
+  if (exposedSetCount === 0) {
+    if (checkSevenPairs(groups)) return true;
+    if (checkThirteenOrphans(groups)) return true;
+  }
   
-  // Check standard winning pattern: 4 sets + 1 pair
-  return checkStandardWinningPattern(groups, exposedSets);
+  // Check standard winning pattern: remaining sets + 1 pair from hand
+  return checkStandardWinningPattern(groups, remainingSetsNeeded);
 };
 
 // Helper function to create a unique key for each tile type
@@ -280,12 +299,8 @@ const checkThirteenOrphans = (groups: Tile[][]): boolean => {
   return counts.join(',') === '1,1,1,1,1,1,1,1,1,1,1,1,2';
 };
 
-// Check standard winning pattern: 4 sets + 1 pair
-const checkStandardWinningPattern = (groups: Tile[][], exposedSets: Tile[][]): boolean => {
-  // Count exposed sets
-  const exposedSetCount = exposedSets.length;
-  const remainingSetsNeeded = 4 - exposedSetCount;
-  
+// FIXED: Check standard winning pattern with proper set counting
+const checkStandardWinningPattern = (groups: Tile[][], remainingSetsNeeded: number): boolean => {
   // Find pairs (exactly one needed)
   const pairs = groups.filter(group => group.length === 2);
   if (pairs.length !== 1) return false;
