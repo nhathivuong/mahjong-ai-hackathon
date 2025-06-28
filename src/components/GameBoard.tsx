@@ -11,13 +11,14 @@ import {
   calculateWinScore,
   checkDrawCondition,
   calculateDrawScores,
-  isOneAwayFromWin
+  isOneAwayFromWin,
+  analyzeWinningHand
 } from '../utils/tileUtils';
 import { SoundManager } from '../utils/soundUtils';
 import TileComponent from './TileComponent';
 import DiscardHistory from './DiscardHistory';
 import BotActionIndicator, { BotActionType } from './BotActionIndicator';
-import { Volume2, VolumeX, RotateCcw, Trophy, Users, Clock, Eye, X } from 'lucide-react';
+import { Volume2, VolumeX, RotateCcw, Trophy, Users, Clock, Eye, X, Star, Award, Sparkles } from 'lucide-react';
 
 interface GameBoardProps {
   gameMode: 'bot' | 'multiplayer';
@@ -36,6 +37,14 @@ interface ClaimOption {
   tilesFromHand: Tile[]; // NEW: Explicitly track which tiles come from hand
 }
 
+interface WinAnalysis {
+  sets: Tile[][];
+  pair: Tile[];
+  handType: string;
+  isSpecialHand: boolean;
+  allTiles: Tile[];
+}
+
 const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selectedTile, setSelectedTile] = useState<string | null>(null);
@@ -47,6 +56,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [showClaimDialog, setShowClaimDialog] = useState(false);
   const [pendingDiscard, setPendingDiscard] = useState<DiscardedTile | null>(null);
   const [isProcessingClaim, setIsProcessingClaim] = useState(false);
+  const [showWinModal, setShowWinModal] = useState(false);
+  const [winAnalysis, setWinAnalysis] = useState<WinAnalysis | null>(null);
   const soundManager = SoundManager.getInstance();
 
   // Check if game is paused due to player actions
@@ -104,6 +115,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       currentPlayer: 0,
       wall: tiles.slice(53),
       discardPile: [],
+      round: 1,
       turnNumber: 1,
       gamePhase: 'playing',
       lastActionWasClaim: false
@@ -115,6 +127,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setShowClaimDialog(false);
     setPendingDiscard(null);
     setIsProcessingClaim(false);
+    setShowWinModal(false);
+    setWinAnalysis(null);
     soundManager.playTransitionSound('game-start');
   }, [soundManager]);
 
@@ -299,6 +313,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       const testHand = [...player.hand, option.discardedTile];
       const winScore = calculateWinScore(testHand, player.exposedSets, 'claimed', player.isDealer);
       
+      // Analyze the winning hand for the modal
+      const analysis = analyzeWinningHand(testHand, player.exposedSets);
+      setWinAnalysis(analysis);
+      
       newGameState = {
         ...gameState,
         gamePhase: 'finished',
@@ -315,6 +333,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       };
       
       soundManager.playWinSound();
+      setShowWinModal(true);
     } else {
       // FIXED: Handle other claims with proper tile removal and set creation
       
@@ -418,6 +437,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     if (isWinningHand(newHand, botPlayer.exposedSets)) {
       const winScore = calculateWinScore(newHand, botPlayer.exposedSets, 'self-drawn', botPlayer.isDealer);
       
+      // Analyze the winning hand for potential modal display
+      const analysis = analyzeWinningHand(newHand, botPlayer.exposedSets);
+      setWinAnalysis(analysis);
+      
       showBotAction('win', botPlayer.name, newHand.slice(-4));
       
       return {
@@ -502,6 +525,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       const testHand = [...player.hand, discardedTile.tile];
       if (isWinningHand(testHand, player.exposedSets)) {
         const winScore = calculateWinScore(testHand, player.exposedSets, 'claimed', player.isDealer);
+        
+        // Analyze the winning hand
+        const analysis = analyzeWinningHand(testHand, player.exposedSets);
+        setWinAnalysis(analysis);
         
         showBotAction('win', player.name, testHand.slice(-4));
         
@@ -735,6 +762,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     if (isWinningHand(newHand, player.exposedSets)) {
       const winScore = calculateWinScore(newHand, player.exposedSets, 'self-drawn', player.isDealer);
       
+      // Analyze the winning hand for the modal
+      const analysis = analyzeWinningHand(newHand, player.exposedSets);
+      setWinAnalysis(analysis);
+      
       setGameState({
         ...gameState,
         gamePhase: 'finished',
@@ -751,6 +782,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       });
       
       soundManager.playWinSound();
+      setShowWinModal(true);
       return;
     }
 
@@ -841,6 +873,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           setGameState(newGameState);
           if (newGameState.gamePhase === 'finished') {
             soundManager.playWinSound();
+            setShowWinModal(true);
           }
         }
 
@@ -864,6 +897,25 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       return () => clearTimeout(timer);
     }
   }, [showClaimDialog, isProcessingClaim]);
+
+  // Helper function to get set type description
+  const getSetTypeDescription = (set: Tile[]): string => {
+    if (set.length === 2) return 'Pair';
+    if (set.length === 4) return 'Kong';
+    if (set.length === 3) {
+      // Check if it's a sequence or triplet
+      if (set[0].type === set[1].type && set[0].type === set[2].type) {
+        if (set[0].value && set[1].value && set[2].value) {
+          const values = [set[0].value, set[1].value, set[2].value].sort((a, b) => a - b);
+          if (values[1] === values[0] + 1 && values[2] === values[1] + 1) {
+            return 'Sequence';
+          }
+        }
+        return 'Triplet';
+      }
+    }
+    return 'Set';
+  };
 
   if (!gameState) {
     return (
@@ -891,6 +943,147 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           tiles={botAction.tiles}
           onComplete={() => setBotAction(null)}
         />
+      )}
+
+      {/* Win Modal */}
+      {showWinModal && gameState.gamePhase === 'finished' && winAnalysis && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-3xl p-8 max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center mb-6">
+                <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-full p-4 mr-4">
+                  <Trophy className="w-12 h-12 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-4xl font-bold text-white mb-2">
+                    {gameState.winner === 'player1' ? 'Congratulations!' : 
+                     `${gameState.players.find(p => p.id === gameState.winner)?.name} Wins!`}
+                  </h1>
+                  <div className="flex items-center justify-center space-x-4 text-emerald-200">
+                    <span className="flex items-center">
+                      <Award className="w-5 h-5 mr-2" />
+                      {winAnalysis.handType}
+                    </span>
+                    <span className="flex items-center">
+                      <Star className="w-5 h-5 mr-2" />
+                      {gameState.winScore} points
+                    </span>
+                    <span className="flex items-center">
+                      <Sparkles className="w-5 h-5 mr-2" />
+                      {gameState.winType === 'self-drawn' ? 'Self-drawn' : 'Claimed'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* All Tiles Display */}
+            <div className="mb-8">
+              <h3 className="text-2xl font-bold text-white mb-4 text-center">Complete Winning Hand</h3>
+              <div className="bg-emerald-800/20 rounded-2xl p-6 border border-emerald-600/30">
+                <div className="flex flex-wrap justify-center gap-2">
+                  {winAnalysis.allTiles.map((tile, index) => (
+                    <TileComponent
+                      key={`all-${tile.id}-${index}`}
+                      tile={tile}
+                      className="border-2 border-amber-400 shadow-lg transform hover:scale-110 transition-transform duration-200"
+                    />
+                  ))}
+                </div>
+                <div className="text-center mt-4 text-emerald-200">
+                  <p className="text-lg font-medium">Total: {winAnalysis.allTiles.length} tiles</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Hand Analysis */}
+            <div className="mb-8">
+              <h3 className="text-2xl font-bold text-white mb-6 text-center">Hand Breakdown</h3>
+              
+              {/* Sets */}
+              <div className="mb-6">
+                <h4 className="text-xl font-semibold text-emerald-200 mb-4 text-center">
+                  4 Sets {winAnalysis.isSpecialHand ? '(Special Hand Pattern)' : ''}
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {winAnalysis.sets.map((set, index) => (
+                    <div key={`set-${index}`} className="bg-white/10 rounded-xl p-4 border border-white/20">
+                      <div className="text-center mb-3">
+                        <span className="text-white font-medium text-sm">
+                          Set {index + 1}: {getSetTypeDescription(set)}
+                        </span>
+                      </div>
+                      <div className="flex justify-center gap-1">
+                        {set.map((tile, tileIndex) => (
+                          <TileComponent
+                            key={`set-${index}-tile-${tileIndex}`}
+                            tile={tile}
+                            height="compact"
+                            className="border border-white/30 shadow-md"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pair */}
+              <div>
+                <h4 className="text-xl font-semibold text-emerald-200 mb-4 text-center">1 Pair</h4>
+                <div className="flex justify-center">
+                  <div className="bg-white/10 rounded-xl p-4 border border-white/20">
+                    <div className="text-center mb-3">
+                      <span className="text-white font-medium text-sm">Pair</span>
+                    </div>
+                    <div className="flex justify-center gap-1">
+                      {winAnalysis.pair.map((tile, index) => (
+                        <TileComponent
+                          key={`pair-${index}`}
+                          tile={tile}
+                          height="compact"
+                          className="border border-white/30 shadow-md"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Special Hand Info */}
+            {winAnalysis.isSpecialHand && (
+              <div className="mb-8">
+                <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-2xl p-6 border border-purple-400/30">
+                  <div className="text-center">
+                    <Sparkles className="w-8 h-8 text-purple-400 mx-auto mb-3" />
+                    <h4 className="text-xl font-bold text-white mb-2">Special Hand!</h4>
+                    <p className="text-purple-200">
+                      {winAnalysis.handType === 'Seven Pairs' && 
+                        'Seven different pairs - a rare and beautiful hand pattern!'}
+                      {winAnalysis.handType === 'Thirteen Orphans' && 
+                        'All terminal and honor tiles with one pair - the ultimate special hand!'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Close Button */}
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setShowWinModal(false);
+                  setWinAnalysis(null);
+                }}
+                className="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-xl hover:from-amber-600 hover:to-orange-700 transition-all duration-300 hover:scale-105 shadow-lg"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Claim Dialog */}

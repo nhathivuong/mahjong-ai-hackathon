@@ -380,6 +380,169 @@ const canFormSets = (groups: Tile[][], setsNeeded: number): boolean => {
   return false;
 };
 
+// NEW: Analyze winning hand to break it down into sets and pair
+export const analyzeWinningHand = (hand: Tile[], exposedSets: Tile[][] = []): {
+  sets: Tile[][];
+  pair: Tile[];
+  handType: string;
+  isSpecialHand: boolean;
+  allTiles: Tile[];
+} => {
+  const allTiles = [...hand, ...exposedSets.flat()];
+  
+  // Check for special hands first
+  const tileMap = new Map<string, Tile[]>();
+  hand.forEach(tile => {
+    const key = getTileKey(tile);
+    if (!tileMap.has(key)) {
+      tileMap.set(key, []);
+    }
+    tileMap.get(key)!.push(tile);
+  });
+
+  const groups = Array.from(tileMap.values());
+  
+  // Check Seven Pairs
+  if (exposedSets.length === 0 && checkSevenPairs(groups)) {
+    return {
+      sets: groups.filter(g => g.length === 2).slice(0, 6), // First 6 pairs as "sets"
+      pair: groups.filter(g => g.length === 2)[6] || [], // Last pair
+      handType: 'Seven Pairs',
+      isSpecialHand: true,
+      allTiles
+    };
+  }
+  
+  // Check Thirteen Orphans
+  if (exposedSets.length === 0 && checkThirteenOrphans(groups)) {
+    const pairGroup = groups.find(g => g.length === 2) || [];
+    const singleGroups = groups.filter(g => g.length === 1);
+    return {
+      sets: [singleGroups.slice(0, 3).flat(), singleGroups.slice(3, 6).flat(), singleGroups.slice(6, 9).flat(), singleGroups.slice(9).flat()].filter(s => s.length > 0),
+      pair: pairGroup,
+      handType: 'Thirteen Orphans',
+      isSpecialHand: true,
+      allTiles
+    };
+  }
+  
+  // Standard hand analysis
+  const result = analyzeStandardHand(hand, exposedSets);
+  return {
+    ...result,
+    handType: 'Standard Hand',
+    isSpecialHand: false,
+    allTiles
+  };
+};
+
+// Helper function to analyze standard winning hands
+const analyzeStandardHand = (hand: Tile[], exposedSets: Tile[][]): {
+  sets: Tile[][];
+  pair: Tile[];
+} => {
+  // Start with exposed sets
+  const sets = [...exposedSets];
+  
+  // Group hand tiles by type
+  const tileMap = new Map<string, Tile[]>();
+  hand.forEach(tile => {
+    const key = getTileKey(tile);
+    if (!tileMap.has(key)) {
+      tileMap.set(key, []);
+    }
+    tileMap.get(key)!.push(tile);
+  });
+
+  const groups = Array.from(tileMap.values());
+  
+  // Find the pair first
+  let pair: Tile[] = [];
+  const remainingGroups = [...groups];
+  
+  for (let i = 0; i < remainingGroups.length; i++) {
+    if (remainingGroups[i].length >= 2) {
+      pair = remainingGroups[i].slice(0, 2);
+      remainingGroups[i] = remainingGroups[i].slice(2);
+      if (remainingGroups[i].length === 0) {
+        remainingGroups.splice(i, 1);
+      }
+      break;
+    }
+  }
+  
+  // Form sets from remaining tiles
+  const setsNeeded = 4 - exposedSets.length;
+  const handSets = extractSetsFromGroups(remainingGroups, setsNeeded);
+  
+  return {
+    sets: [...sets, ...handSets],
+    pair
+  };
+};
+
+// Helper function to extract sets from grouped tiles
+const extractSetsFromGroups = (groups: Tile[][], setsNeeded: number): Tile[][] => {
+  const sets: Tile[][] = [];
+  const workingGroups = groups.map(g => [...g]);
+  
+  // Extract kongs first
+  for (let i = 0; i < workingGroups.length && sets.length < setsNeeded; i++) {
+    if (workingGroups[i].length >= 4) {
+      sets.push(workingGroups[i].slice(0, 4));
+      workingGroups[i] = workingGroups[i].slice(4);
+    }
+  }
+  
+  // Extract triplets
+  for (let i = 0; i < workingGroups.length && sets.length < setsNeeded; i++) {
+    if (workingGroups[i].length >= 3) {
+      sets.push(workingGroups[i].slice(0, 3));
+      workingGroups[i] = workingGroups[i].slice(3);
+    }
+  }
+  
+  // Extract sequences
+  while (sets.length < setsNeeded) {
+    let foundSequence = false;
+    
+    for (let i = 0; i < workingGroups.length && !foundSequence; i++) {
+      const group = workingGroups[i];
+      if (group.length > 0) {
+        const tile = group[0];
+        if (tile.value && (tile.type === 'character' || tile.type === 'bamboo' || tile.type === 'dot')) {
+          const suit = tile.type;
+          const value = tile.value;
+          
+          // Look for sequence
+          const nextGroup = workingGroups.find(g => 
+            g.length > 0 && g[0].type === suit && g[0].value === value + 1
+          );
+          const thirdGroup = workingGroups.find(g => 
+            g.length > 0 && g[0].type === suit && g[0].value === value + 2
+          );
+          
+          if (nextGroup && thirdGroup) {
+            const sequence = [group[0], nextGroup[0], thirdGroup[0]];
+            sets.push(sequence);
+            
+            // Remove used tiles
+            group.splice(0, 1);
+            nextGroup.splice(0, 1);
+            thirdGroup.splice(0, 1);
+            
+            foundSequence = true;
+          }
+        }
+      }
+    }
+    
+    if (!foundSequence) break;
+  }
+  
+  return sets;
+};
+
 // Check if a hand is one tile away from winning (for better bot AI)
 export const isOneAwayFromWin = (hand: Tile[], exposedSets: Tile[][] = []): Tile[] => {
   const winningTiles: Tile[] = [];
