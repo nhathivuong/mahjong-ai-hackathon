@@ -33,6 +33,7 @@ interface ClaimOption {
   type: 'chow' | 'pung' | 'kong' | 'win';
   tiles: Tile[];
   discardedTile: Tile;
+  tilesFromHand: Tile[]; // NEW: Explicitly track which tiles come from hand
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
@@ -45,7 +46,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [claimOptions, setClaimOptions] = useState<ClaimOption[]>([]);
   const [showClaimDialog, setShowClaimDialog] = useState(false);
   const [pendingDiscard, setPendingDiscard] = useState<DiscardedTile | null>(null);
-  const [isProcessingClaim, setIsProcessingClaim] = useState(false); // NEW: Processing state
+  const [isProcessingClaim, setIsProcessingClaim] = useState(false);
   const soundManager = SoundManager.getInstance();
 
   // Check if game is paused due to player actions
@@ -105,7 +106,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       discardPile: [],
       turnNumber: 1,
       gamePhase: 'playing',
-      lastActionWasClaim: false // Initialize claim flag
+      lastActionWasClaim: false
     };
 
     setGameState(newGameState);
@@ -113,7 +114,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setClaimOptions([]);
     setShowClaimDialog(false);
     setPendingDiscard(null);
-    setIsProcessingClaim(false); // Reset processing state
+    setIsProcessingClaim(false);
     soundManager.playTransitionSound('game-start');
   }, [soundManager]);
 
@@ -148,40 +149,52 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     return updatedDiscardPile;
   };
 
-  // ENHANCED: Helper function to properly remove tiles from hand by matching tile properties
-  const removeTilesFromHand = (hand: Tile[], tilesToRemove: Tile[]): Tile[] => {
-    let newHand = [...hand];
+  // FIXED: Helper function to find exact matching tiles in hand
+  const findMatchingTilesInHand = (hand: Tile[], targetTiles: Tile[]): Tile[] => {
+    const foundTiles: Tile[] = [];
+    const handCopy = [...hand];
     
-    console.log('🔧 REMOVING TILES FROM HAND:');
-    console.log('Original hand size:', newHand.length);
-    console.log('Tiles to remove:', tilesToRemove.map(t => `${t.type}-${t.value || t.dragon || t.wind}`));
+    console.log('🔍 FINDING MATCHING TILES:');
+    console.log('Hand has:', handCopy.length, 'tiles');
+    console.log('Looking for:', targetTiles.map(t => `${t.type}-${t.value || t.dragon || t.wind}`));
     
-    tilesToRemove.forEach((tileToRemove, index) => {
-      const beforeSize = newHand.length;
-      const matchIndex = newHand.findIndex(tile => 
-        tile.type === tileToRemove.type &&
-        tile.value === tileToRemove.value &&
-        tile.dragon === tileToRemove.dragon &&
-        tile.wind === tileToRemove.wind
+    for (const targetTile of targetTiles) {
+      const matchIndex = handCopy.findIndex(tile => 
+        tile.type === targetTile.type &&
+        tile.value === targetTile.value &&
+        tile.dragon === targetTile.dragon &&
+        tile.wind === targetTile.wind
       );
       
       if (matchIndex !== -1) {
-        const removedTile = newHand.splice(matchIndex, 1)[0];
-        console.log(`✅ Removed tile ${index + 1}:`, `${removedTile.type}-${removedTile.value || removedTile.dragon || removedTile.wind}`);
+        const foundTile = handCopy.splice(matchIndex, 1)[0]; // Remove from copy to avoid duplicates
+        foundTiles.push(foundTile);
+        console.log('✅ Found:', `${foundTile.type}-${foundTile.value || foundTile.dragon || foundTile.wind}`);
       } else {
-        console.log(`❌ Could not find tile ${index + 1} to remove:`, `${tileToRemove.type}-${tileToRemove.value || tileToRemove.dragon || tileToRemove.wind}`);
+        console.log('❌ Not found:', `${targetTile.type}-${targetTile.value || targetTile.dragon || targetTile.wind}`);
       }
-      
-      console.log(`Hand size: ${beforeSize} → ${newHand.length}`);
-    });
+    }
     
-    console.log('Final hand size:', newHand.length);
-    console.log('---');
+    console.log('Found', foundTiles.length, 'out of', targetTiles.length, 'tiles');
+    return foundTiles;
+  };
+
+  // FIXED: Helper function to remove specific tiles from hand by ID
+  const removeTilesFromHandById = (hand: Tile[], tilesToRemove: Tile[]): Tile[] => {
+    console.log('🗑️ REMOVING TILES BY ID:');
+    console.log('Original hand size:', hand.length);
+    console.log('Removing:', tilesToRemove.map(t => `${t.id} (${t.type}-${t.value || t.dragon || t.wind})`));
+    
+    const tileIdsToRemove = new Set(tilesToRemove.map(t => t.id));
+    const newHand = hand.filter(tile => !tileIdsToRemove.has(tile.id));
+    
+    console.log('New hand size:', newHand.length);
+    console.log('Removed:', hand.length - newHand.length, 'tiles');
     
     return newHand;
   };
 
-  // Check if player can claim the discarded tile
+  // FIXED: Check if player can claim the discarded tile with proper tile tracking
   const checkPlayerClaims = (gameState: GameState, discardedTile: DiscardedTile): ClaimOption[] => {
     const player = gameState.players[0]; // Human player
     const options: ClaimOption[] = [];
@@ -189,34 +202,47 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     // Don't allow claiming own discards
     if (discardedTile.playerId === player.id) return options;
 
+    console.log('🎯 CHECKING PLAYER CLAIMS:');
+    console.log('Discarded tile:', `${discardedTile.tile.type}-${discardedTile.tile.value || discardedTile.tile.dragon || discardedTile.tile.wind}`);
+    console.log('Player hand size:', player.hand.length);
+
     // Check for win first (highest priority)
     const testHand = [...player.hand, discardedTile.tile];
     if (isWinningHand(testHand, player.exposedSets)) {
       options.push({
         type: 'win',
         tiles: [discardedTile.tile],
-        discardedTile: discardedTile.tile
+        discardedTile: discardedTile.tile,
+        tilesFromHand: [] // No tiles removed from hand for win
       });
     }
 
     // Check for kong (second priority)
     const kongTiles = canFormKong(player.hand, discardedTile.tile);
     if (kongTiles) {
-      options.push({
-        type: 'kong',
-        tiles: [discardedTile.tile, ...kongTiles],
-        discardedTile: discardedTile.tile
-      });
+      const tilesFromHand = findMatchingTilesInHand(player.hand, kongTiles);
+      if (tilesFromHand.length === kongTiles.length) {
+        options.push({
+          type: 'kong',
+          tiles: [discardedTile.tile, ...tilesFromHand],
+          discardedTile: discardedTile.tile,
+          tilesFromHand: tilesFromHand
+        });
+      }
     }
 
     // Check for pung (third priority)
     const pungTiles = canFormPung(player.hand, discardedTile.tile);
     if (pungTiles) {
-      options.push({
-        type: 'pung',
-        tiles: [discardedTile.tile, ...pungTiles],
-        discardedTile: discardedTile.tile
-      });
+      const tilesFromHand = findMatchingTilesInHand(player.hand, pungTiles);
+      if (tilesFromHand.length === pungTiles.length) {
+        options.push({
+          type: 'pung',
+          tiles: [discardedTile.tile, ...tilesFromHand],
+          discardedTile: discardedTile.tile,
+          tilesFromHand: tilesFromHand
+        });
+      }
     }
 
     // Check for chow (lowest priority, only from previous player)
@@ -228,44 +254,48 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     if (nextPlayerIndex === 0) { // Player is next after the discarder
       const chowOptions = canFormChow(player.hand, discardedTile.tile);
       chowOptions.forEach(chowTiles => {
-        const sequenceTiles = [discardedTile.tile, ...chowTiles].sort((a, b) => (a.value || 0) - (b.value || 0));
-        options.push({
-          type: 'chow',
-          tiles: sequenceTiles,
-          discardedTile: discardedTile.tile
-        });
+        const tilesFromHand = findMatchingTilesInHand(player.hand, chowTiles);
+        if (tilesFromHand.length === chowTiles.length) {
+          const sequenceTiles = [discardedTile.tile, ...tilesFromHand].sort((a, b) => (a.value || 0) - (b.value || 0));
+          options.push({
+            type: 'chow',
+            tiles: sequenceTiles,
+            discardedTile: discardedTile.tile,
+            tilesFromHand: tilesFromHand
+          });
+        }
       });
     }
 
+    console.log('Found', options.length, 'claim options');
     return options;
   };
 
-  // ENHANCED: Handle player claim with slower processing and better debugging
+  // FIXED: Handle player claim with proper tile management
   const handlePlayerClaim = async (option: ClaimOption) => {
     if (!gameState || !pendingDiscard || isProcessingClaim) return;
 
     console.log('🎯 PROCESSING PLAYER CLAIM:');
     console.log('Claim type:', option.type);
-    console.log('Tiles involved:', option.tiles.map(t => `${t.type}-${t.value || t.dragon || t.wind}`));
+    console.log('Total tiles in claim:', option.tiles.length);
+    console.log('Tiles from hand:', option.tilesFromHand.length);
     
-    setIsProcessingClaim(true); // Start processing
+    setIsProcessingClaim(true);
     
-    // Add a small delay to prevent race conditions
+    // Add delay to prevent race conditions
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const player = gameState.players[0];
-    let newHand = [...player.hand];
-    let newExposedSets = [...player.exposedSets];
     let newGameState = { ...gameState };
 
-    console.log('Player hand before claim:', newHand.length, 'tiles');
-    console.log('Player exposed sets before:', newExposedSets.length, 'sets');
+    console.log('Player hand before claim:', player.hand.length, 'tiles');
+    console.log('Player exposed sets before:', player.exposedSets.length, 'sets');
 
     // Remove claimed tile from discard pile
     const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, option.discardedTile);
 
     if (option.type === 'win') {
-      // Handle win
+      // Handle win - add discarded tile to hand for scoring
       const testHand = [...player.hand, option.discardedTile];
       const winScore = calculateWinScore(testHand, player.exposedSets, 'claimed', player.isDealer);
       
@@ -276,7 +306,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         winType: 'claimed',
         winScore,
         discardPile: updatedDiscardPile,
-        lastActionWasClaim: false, // Reset claim flag on win
+        lastActionWasClaim: false,
         players: gameState.players.map(p => 
           p.id === player.id 
             ? { ...p, hand: testHand, score: p.score + winScore }
@@ -286,20 +316,17 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       
       soundManager.playWinSound();
     } else {
-      // ENHANCED: Handle other claims (chow, pung, kong) with careful tile removal
-      // The first tile in option.tiles is the discarded tile, the rest are from hand
-      const tilesFromHand = option.tiles.slice(1); // Remove the discarded tile from the list
+      // FIXED: Handle other claims with proper tile removal and set creation
       
-      console.log('Tiles to remove from hand:', tilesFromHand.map(t => `${t.type}-${t.value || t.dragon || t.wind}`));
+      // Step 1: Remove the specific tiles from hand that are part of the claim
+      const newHand = removeTilesFromHandById(player.hand, option.tilesFromHand);
       
-      // Remove the matching tiles from hand (not by ID, but by tile properties)
-      newHand = removeTilesFromHand(player.hand, tilesFromHand);
-      
-      // Add the complete set to exposed sets
-      newExposedSets.push(option.tiles);
-      
-      console.log('Player hand after claim:', newHand.length, 'tiles');
+      // Step 2: Create the exposed set with the discarded tile + tiles from hand
+      const newExposedSets = [...player.exposedSets, option.tiles];
+
+      console.log('Player hand after removal:', newHand.length, 'tiles');
       console.log('Player exposed sets after:', newExposedSets.length, 'sets');
+      console.log('New exposed set has:', option.tiles.length, 'tiles');
 
       newGameState = {
         ...gameState,
@@ -316,16 +343,18 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       soundManager.playTileSound('claim', 'center');
     }
 
-    // Add another small delay before updating state
+    // Add delay before updating state
     await new Promise(resolve => setTimeout(resolve, 200));
 
     setGameState(newGameState);
     setClaimOptions([]);
     setShowClaimDialog(false);
     setPendingDiscard(null);
-    setIsProcessingClaim(false); // End processing
+    setIsProcessingClaim(false);
     
     console.log('✅ CLAIM PROCESSING COMPLETE');
+    console.log('Final hand size:', newGameState.players[0].hand.length);
+    console.log('Final exposed sets:', newGameState.players[0].exposedSets.length);
     console.log('---');
   };
 
@@ -410,21 +439,24 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     // Check if bot can form kong with drawn tile
     const kongTiles = canFormKong(botPlayer.hand, drawnTile);
     if (kongTiles && Math.random() > 0.3) {
-      const newExposedSets = [...botPlayer.exposedSets, [drawnTile, ...kongTiles]];
-      const remainingHand = botPlayer.hand.filter(tile => !kongTiles.includes(tile));
-      
-      showBotAction('kong', botPlayer.name, [drawnTile, ...kongTiles]);
-      
-      return {
-        ...gameState,
-        wall: newWall,
-        lastActionWasClaim: true, // Bot must discard next turn without drawing
-        players: gameState.players.map(p => 
-          p.id === botPlayer.id 
-            ? { ...p, hand: remainingHand, exposedSets: newExposedSets }
-            : p
-        )
-      };
+      const tilesFromHand = findMatchingTilesInHand(botPlayer.hand, kongTiles);
+      if (tilesFromHand.length === kongTiles.length) {
+        const newExposedSets = [...botPlayer.exposedSets, [drawnTile, ...tilesFromHand]];
+        const remainingHand = removeTilesFromHandById(botPlayer.hand, tilesFromHand);
+        
+        showBotAction('kong', botPlayer.name, [drawnTile, ...tilesFromHand]);
+        
+        return {
+          ...gameState,
+          wall: newWall,
+          lastActionWasClaim: true, // Bot must discard next turn without drawing
+          players: gameState.players.map(p => 
+            p.id === botPlayer.id 
+              ? { ...p, hand: remainingHand, exposedSets: newExposedSets }
+              : p
+          )
+        };
+      }
     }
 
     // Normal discard after drawing
@@ -455,7 +487,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     };
   }, []);
 
-  // ENHANCED: Check if any bot can claim the discarded tile with proper tile removal
+  // FIXED: Check if any bot can claim the discarded tile with proper tile handling
   const checkBotClaims = useCallback((gameState: GameState, discardedTile: DiscardedTile) => {
     const currentPlayerIndex = gameState.currentPlayer;
     
@@ -495,59 +527,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       // Check for kong (second priority)
       const kongTiles = canFormKong(player.hand, discardedTile.tile);
       if (kongTiles && Math.random() > 0.4) {
-        const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...kongTiles]];
-        const newHand = removeTilesFromHand(player.hand, kongTiles); // ENHANCED: Use proper tile removal
-        
-        showBotAction('kong', player.name, [discardedTile.tile, ...kongTiles]);
-        
-        const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
-        
-        return {
-          ...gameState,
-          currentPlayer: playerIndex,
-          discardPile: updatedDiscardPile,
-          lastActionWasClaim: true, // Bot must discard next without drawing
-          players: gameState.players.map(p => 
-            p.id === player.id 
-              ? { ...p, hand: sortTiles(newHand), exposedSets: newExposedSets }
-            : p
-          )
-        };
-      }
-
-      // Check for pung (third priority)
-      const pungTiles = canFormPung(player.hand, discardedTile.tile);
-      if (pungTiles && Math.random() > 0.5) {
-        const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...pungTiles]];
-        const newHand = removeTilesFromHand(player.hand, pungTiles); // ENHANCED: Use proper tile removal
-        
-        showBotAction('pung', player.name, [discardedTile.tile, ...pungTiles]);
-        
-        const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
-        
-        return {
-          ...gameState,
-          currentPlayer: playerIndex,
-          discardPile: updatedDiscardPile,
-          lastActionWasClaim: true, // Bot must discard next without drawing
-          players: gameState.players.map(p => 
-            p.id === player.id 
-              ? { ...p, hand: sortTiles(newHand), exposedSets: newExposedSets }
-            : p
-          )
-        };
-      }
-
-      // Check for chow (lowest priority, only from previous player)
-      if (i === 1) {
-        const chowOptions = canFormChow(player.hand, discardedTile.tile);
-        if (chowOptions.length > 0 && Math.random() > 0.6) {
-          const chowTiles = chowOptions[0];
-          const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...chowTiles]];
-          const newHand = removeTilesFromHand(player.hand, chowTiles); // ENHANCED: Use proper tile removal
+        const tilesFromHand = findMatchingTilesInHand(player.hand, kongTiles);
+        if (tilesFromHand.length === kongTiles.length) {
+          const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...tilesFromHand]];
+          const newHand = removeTilesFromHandById(player.hand, tilesFromHand);
           
-          const sequenceTiles = [discardedTile.tile, ...chowTiles].sort((a, b) => (a.value || 0) - (b.value || 0));
-          showBotAction('chow', player.name, sequenceTiles);
+          showBotAction('kong', player.name, [discardedTile.tile, ...tilesFromHand]);
           
           const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
           
@@ -562,6 +547,62 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               : p
             )
           };
+        }
+      }
+
+      // Check for pung (third priority)
+      const pungTiles = canFormPung(player.hand, discardedTile.tile);
+      if (pungTiles && Math.random() > 0.5) {
+        const tilesFromHand = findMatchingTilesInHand(player.hand, pungTiles);
+        if (tilesFromHand.length === pungTiles.length) {
+          const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...tilesFromHand]];
+          const newHand = removeTilesFromHandById(player.hand, tilesFromHand);
+          
+          showBotAction('pung', player.name, [discardedTile.tile, ...tilesFromHand]);
+          
+          const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
+          
+          return {
+            ...gameState,
+            currentPlayer: playerIndex,
+            discardPile: updatedDiscardPile,
+            lastActionWasClaim: true, // Bot must discard next without drawing
+            players: gameState.players.map(p => 
+              p.id === player.id 
+                ? { ...p, hand: sortTiles(newHand), exposedSets: newExposedSets }
+              : p
+            )
+          };
+        }
+      }
+
+      // Check for chow (lowest priority, only from previous player)
+      if (i === 1) {
+        const chowOptions = canFormChow(player.hand, discardedTile.tile);
+        if (chowOptions.length > 0 && Math.random() > 0.6) {
+          const chowTiles = chowOptions[0];
+          const tilesFromHand = findMatchingTilesInHand(player.hand, chowTiles);
+          if (tilesFromHand.length === chowTiles.length) {
+            const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...tilesFromHand]];
+            const newHand = removeTilesFromHandById(player.hand, tilesFromHand);
+            
+            const sequenceTiles = [discardedTile.tile, ...tilesFromHand].sort((a, b) => (a.value || 0) - (b.value || 0));
+            showBotAction('chow', player.name, sequenceTiles);
+            
+            const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, discardedTile.tile);
+            
+            return {
+              ...gameState,
+              currentPlayer: playerIndex,
+              discardPile: updatedDiscardPile,
+              lastActionWasClaim: true, // Bot must discard next without drawing
+              players: gameState.players.map(p => 
+                p.id === player.id 
+                  ? { ...p, hand: sortTiles(newHand), exposedSets: newExposedSets }
+                : p
+              )
+            };
+          }
         }
       }
     }
