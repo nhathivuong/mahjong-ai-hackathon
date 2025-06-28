@@ -45,10 +45,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const [claimOptions, setClaimOptions] = useState<ClaimOption[]>([]);
   const [showClaimDialog, setShowClaimDialog] = useState(false);
   const [pendingDiscard, setPendingDiscard] = useState<DiscardedTile | null>(null);
+  const [isProcessingClaim, setIsProcessingClaim] = useState(false); // NEW: Processing state
   const soundManager = SoundManager.getInstance();
 
   // Check if game is paused due to player actions
-  const isGamePaused = showClaimDialog || botAction;
+  const isGamePaused = showClaimDialog || botAction || isProcessingClaim;
 
   // Initialize game
   const initializeGame = useCallback(() => {
@@ -112,6 +113,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setClaimOptions([]);
     setShowClaimDialog(false);
     setPendingDiscard(null);
+    setIsProcessingClaim(false); // Reset processing state
     soundManager.playTransitionSound('game-start');
   }, [soundManager]);
 
@@ -146,22 +148,35 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     return updatedDiscardPile;
   };
 
-  // FIXED: Helper function to properly remove tiles from hand by matching tile properties
+  // ENHANCED: Helper function to properly remove tiles from hand by matching tile properties
   const removeTilesFromHand = (hand: Tile[], tilesToRemove: Tile[]): Tile[] => {
     let newHand = [...hand];
     
-    tilesToRemove.forEach(tileToRemove => {
-      const index = newHand.findIndex(tile => 
+    console.log('🔧 REMOVING TILES FROM HAND:');
+    console.log('Original hand size:', newHand.length);
+    console.log('Tiles to remove:', tilesToRemove.map(t => `${t.type}-${t.value || t.dragon || t.wind}`));
+    
+    tilesToRemove.forEach((tileToRemove, index) => {
+      const beforeSize = newHand.length;
+      const matchIndex = newHand.findIndex(tile => 
         tile.type === tileToRemove.type &&
         tile.value === tileToRemove.value &&
         tile.dragon === tileToRemove.dragon &&
         tile.wind === tileToRemove.wind
       );
       
-      if (index !== -1) {
-        newHand.splice(index, 1);
+      if (matchIndex !== -1) {
+        const removedTile = newHand.splice(matchIndex, 1)[0];
+        console.log(`✅ Removed tile ${index + 1}:`, `${removedTile.type}-${removedTile.value || removedTile.dragon || removedTile.wind}`);
+      } else {
+        console.log(`❌ Could not find tile ${index + 1} to remove:`, `${tileToRemove.type}-${tileToRemove.value || tileToRemove.dragon || tileToRemove.wind}`);
       }
+      
+      console.log(`Hand size: ${beforeSize} → ${newHand.length}`);
     });
+    
+    console.log('Final hand size:', newHand.length);
+    console.log('---');
     
     return newHand;
   };
@@ -225,14 +240,26 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     return options;
   };
 
-  // FIXED: Handle player claim with proper tile removal
-  const handlePlayerClaim = (option: ClaimOption) => {
-    if (!gameState || !pendingDiscard) return;
+  // ENHANCED: Handle player claim with slower processing and better debugging
+  const handlePlayerClaim = async (option: ClaimOption) => {
+    if (!gameState || !pendingDiscard || isProcessingClaim) return;
+
+    console.log('🎯 PROCESSING PLAYER CLAIM:');
+    console.log('Claim type:', option.type);
+    console.log('Tiles involved:', option.tiles.map(t => `${t.type}-${t.value || t.dragon || t.wind}`));
+    
+    setIsProcessingClaim(true); // Start processing
+    
+    // Add a small delay to prevent race conditions
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     const player = gameState.players[0];
     let newHand = [...player.hand];
     let newExposedSets = [...player.exposedSets];
     let newGameState = { ...gameState };
+
+    console.log('Player hand before claim:', newHand.length, 'tiles');
+    console.log('Player exposed sets before:', newExposedSets.length, 'sets');
 
     // Remove claimed tile from discard pile
     const updatedDiscardPile = removeClaimedTileFromDiscardPile(gameState.discardPile, option.discardedTile);
@@ -259,15 +286,20 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       
       soundManager.playWinSound();
     } else {
-      // FIXED: Handle other claims (chow, pung, kong) with proper tile removal
+      // ENHANCED: Handle other claims (chow, pung, kong) with careful tile removal
       // The first tile in option.tiles is the discarded tile, the rest are from hand
       const tilesFromHand = option.tiles.slice(1); // Remove the discarded tile from the list
+      
+      console.log('Tiles to remove from hand:', tilesFromHand.map(t => `${t.type}-${t.value || t.dragon || t.wind}`));
       
       // Remove the matching tiles from hand (not by ID, but by tile properties)
       newHand = removeTilesFromHand(player.hand, tilesFromHand);
       
       // Add the complete set to exposed sets
       newExposedSets.push(option.tiles);
+      
+      console.log('Player hand after claim:', newHand.length, 'tiles');
+      console.log('Player exposed sets after:', newExposedSets.length, 'sets');
 
       newGameState = {
         ...gameState,
@@ -284,15 +316,22 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       soundManager.playTileSound('claim', 'center');
     }
 
+    // Add another small delay before updating state
+    await new Promise(resolve => setTimeout(resolve, 200));
+
     setGameState(newGameState);
     setClaimOptions([]);
     setShowClaimDialog(false);
     setPendingDiscard(null);
+    setIsProcessingClaim(false); // End processing
+    
+    console.log('✅ CLAIM PROCESSING COMPLETE');
+    console.log('---');
   };
 
   // Handle claim dialog timeout or skip
   const handleClaimSkip = () => {
-    if (!gameState || !pendingDiscard) return;
+    if (!gameState || !pendingDiscard || isProcessingClaim) return;
 
     // Continue with bot claims check
     const claimResult = checkBotClaims(gameState, pendingDiscard);
@@ -416,7 +455,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     };
   }, []);
 
-  // FIXED: Check if any bot can claim the discarded tile with proper tile removal
+  // ENHANCED: Check if any bot can claim the discarded tile with proper tile removal
   const checkBotClaims = useCallback((gameState: GameState, discardedTile: DiscardedTile) => {
     const currentPlayerIndex = gameState.currentPlayer;
     
@@ -457,7 +496,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       const kongTiles = canFormKong(player.hand, discardedTile.tile);
       if (kongTiles && Math.random() > 0.4) {
         const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...kongTiles]];
-        const newHand = removeTilesFromHand(player.hand, kongTiles); // FIXED: Use proper tile removal
+        const newHand = removeTilesFromHand(player.hand, kongTiles); // ENHANCED: Use proper tile removal
         
         showBotAction('kong', player.name, [discardedTile.tile, ...kongTiles]);
         
@@ -470,7 +509,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           lastActionWasClaim: true, // Bot must discard next without drawing
           players: gameState.players.map(p => 
             p.id === player.id 
-              ? { ...p, hand: newHand, exposedSets: newExposedSets }
+              ? { ...p, hand: sortTiles(newHand), exposedSets: newExposedSets }
             : p
           )
         };
@@ -480,7 +519,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       const pungTiles = canFormPung(player.hand, discardedTile.tile);
       if (pungTiles && Math.random() > 0.5) {
         const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...pungTiles]];
-        const newHand = removeTilesFromHand(player.hand, pungTiles); // FIXED: Use proper tile removal
+        const newHand = removeTilesFromHand(player.hand, pungTiles); // ENHANCED: Use proper tile removal
         
         showBotAction('pung', player.name, [discardedTile.tile, ...pungTiles]);
         
@@ -493,7 +532,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           lastActionWasClaim: true, // Bot must discard next without drawing
           players: gameState.players.map(p => 
             p.id === player.id 
-              ? { ...p, hand: newHand, exposedSets: newExposedSets }
+              ? { ...p, hand: sortTiles(newHand), exposedSets: newExposedSets }
             : p
           )
         };
@@ -505,7 +544,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         if (chowOptions.length > 0 && Math.random() > 0.6) {
           const chowTiles = chowOptions[0];
           const newExposedSets = [...player.exposedSets, [discardedTile.tile, ...chowTiles]];
-          const newHand = removeTilesFromHand(player.hand, chowTiles); // FIXED: Use proper tile removal
+          const newHand = removeTilesFromHand(player.hand, chowTiles); // ENHANCED: Use proper tile removal
           
           const sequenceTiles = [discardedTile.tile, ...chowTiles].sort((a, b) => (a.value || 0) - (b.value || 0));
           showBotAction('chow', player.name, sequenceTiles);
@@ -519,7 +558,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             lastActionWasClaim: true, // Bot must discard next without drawing
             players: gameState.players.map(p => 
               p.id === player.id 
-                ? { ...p, hand: newHand, exposedSets: newExposedSets }
+                ? { ...p, hand: sortTiles(newHand), exposedSets: newExposedSets }
               : p
             )
           };
@@ -568,7 +607,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   // Handle player tile selection
   const handleTileClick = (tileId: string) => {
-    if (!gameState || gameState.gamePhase !== 'playing' || gameState.currentPlayer !== 0) {
+    if (!gameState || gameState.gamePhase !== 'playing' || gameState.currentPlayer !== 0 || isProcessingClaim) {
       return;
     }
 
@@ -577,7 +616,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   // Handle player discard
   const handleDiscard = () => {
-    if (!gameState || !selectedTile || gameState.currentPlayer !== 0) {
+    if (!gameState || !selectedTile || gameState.currentPlayer !== 0 || isProcessingClaim) {
       return;
     }
 
@@ -632,7 +671,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   // Handle draw tile - now automatic for normal turns
   const handleDrawTile = () => {
-    if (!gameState || gameState.currentPlayer !== 0 || gameState.wall.length === 0) {
+    if (!gameState || gameState.currentPlayer !== 0 || gameState.wall.length === 0 || isProcessingClaim) {
       return;
     }
 
@@ -776,14 +815,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   // Auto-close claim dialog after timeout
   useEffect(() => {
-    if (showClaimDialog) {
+    if (showClaimDialog && !isProcessingClaim) {
       const timer = setTimeout(() => {
         handleClaimSkip();
       }, 8000); // 8 seconds to decide
 
       return () => clearTimeout(timer);
     }
-  }, [showClaimDialog]);
+  }, [showClaimDialog, isProcessingClaim]);
 
   if (!gameState) {
     return (
@@ -796,7 +835,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const currentPlayer = gameState.players[gameState.currentPlayer];
   const playerHand = gameState.players[0];
   const canDraw = gameState.currentPlayer === 0 && gameState.wall.length > 0 && !isFirstMove && !gameState.lastActionWasClaim;
-  const canDiscard = gameState.currentPlayer === 0 && selectedTile !== null;
+  const canDiscard = gameState.currentPlayer === 0 && selectedTile !== null && !isProcessingClaim;
   const isGameFinished = gameState.gamePhase === 'finished' || gameState.gamePhase === 'draw';
   const isPlayerTurn = gameState.currentPlayer === 0;
   const needsToDrawFirst = isPlayerTurn && !isFirstMove && !gameState.lastActionWasClaim && playerHand.hand.length === 13;
@@ -821,7 +860,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               <h3 className="text-white font-bold text-xl">Claim Tile?</h3>
               <button
                 onClick={handleClaimSkip}
-                className="p-2 text-white/60 hover:text-white transition-colors"
+                disabled={isProcessingClaim}
+                className="p-2 text-white/60 hover:text-white transition-colors disabled:opacity-50"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -837,12 +877,23 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               </div>
             )}
             
+            {/* Processing indicator */}
+            {isProcessingClaim && (
+              <div className="text-center mb-4">
+                <div className="inline-flex items-center space-x-2 text-amber-300">
+                  <Clock className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Processing claim...</span>
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-3">
               {claimOptions.map((option, index) => (
                 <button
                   key={index}
                   onClick={() => handlePlayerClaim(option)}
-                  className="w-full p-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white transition-all duration-200 hover:scale-105"
+                  disabled={isProcessingClaim}
+                  className="w-full p-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium capitalize">{option.type}</span>
@@ -861,14 +912,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               
               <button
                 onClick={handleClaimSkip}
-                className="w-full p-3 bg-gray-600/50 hover:bg-gray-600/70 border border-gray-500/50 rounded-lg text-white transition-all duration-200"
+                disabled={isProcessingClaim}
+                className="w-full p-3 bg-gray-600/50 hover:bg-gray-600/70 border border-gray-500/50 rounded-lg text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Skip / Pass
               </button>
             </div>
             
             <div className="mt-4 text-center text-xs text-emerald-300">
-              Auto-skip in 8 seconds
+              {isProcessingClaim ? 'Processing...' : 'Auto-skip in 8 seconds'}
             </div>
           </div>
         </div>
@@ -889,7 +941,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             {isGamePaused && (
               <div className="bg-red-500/20 backdrop-blur-sm border border-red-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
                 <Clock className="w-4 h-4 text-red-400 animate-pulse" />
-                <span className="text-red-200 font-medium text-sm">Game Paused</span>
+                <span className="text-red-200 font-medium text-sm">
+                  {isProcessingClaim ? 'Processing Claim...' : 'Game Paused'}
+                </span>
               </div>
             )}
             
@@ -940,7 +994,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               <div className="flex items-center justify-center space-x-3">
                 <Users className="w-5 h-5 text-emerald-300" />
                 <span className="text-white font-medium text-lg">
-                  {isGamePaused ? "Game Paused - Waiting for player decision" :
+                  {isGamePaused ? 
+                    (isProcessingClaim ? "Processing your claim..." : "Game Paused - Waiting for player decision") :
                    currentPlayer.isBot ? `${currentPlayer.name} is thinking...` : 
                    isFirstMove ? "Your turn - Must discard a tile first" : 
                    gameState.lastActionWasClaim ? "Your turn - Must discard after claim" : 
@@ -1070,7 +1125,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 onClick={() => handleTileClick(tile.id)}
                 className={`transition-all duration-200 ${
                   gameState.winner === 'player1' ? "border-2 border-amber-400 shadow-lg" : ""
-                }`}
+                } ${isProcessingClaim ? "opacity-50 cursor-not-allowed" : ""}`}
               />
             ))}
           </div>
@@ -1087,7 +1142,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                     : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                 }`}
               >
-                {isFirstMove ? "Discard Selected (Required)" : 
+                {isProcessingClaim ? "Processing..." :
+                 isFirstMove ? "Discard Selected (Required)" : 
                  gameState.lastActionWasClaim ? "Discard Selected (Required After Claim)" :
                  "Discard Selected"}
               </button>
