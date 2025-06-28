@@ -444,7 +444,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           players: gameState.players.map(p => 
             p.id === player.id 
               ? { ...p, hand: newHand, exposedSets: newExposedSets }
-              : p
+            : p
           )
         };
       }
@@ -658,10 +658,16 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     soundManager.playTileSound('draw', 'center');
   };
 
-  // Auto-draw for player on their turn (except first move and after claims)
+  // Check if game is paused due to player modals
+  const isGamePaused = showClaimDialog || botAction;
+
+  // Auto-draw for player on their turn (except first move and after claims) - PAUSED DURING MODALS
   useEffect(() => {
     if (!gameState || gameState.gamePhase !== 'playing' || gameState.currentPlayer !== 0) return;
     if (isFirstMove || gameState.lastActionWasClaim || gameState.wall.length === 0) return;
+    
+    // 🚨 CRITICAL: Pause auto-draw when player action modals are active
+    if (isGamePaused) return;
 
     // Auto-draw after a short delay to show turn transition
     const timer = setTimeout(() => {
@@ -669,14 +675,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [gameState?.currentPlayer, gameState?.lastActionWasClaim, isFirstMove]);
+  }, [gameState?.currentPlayer, gameState?.lastActionWasClaim, isFirstMove, isGamePaused]);
 
-  // Bot turn processing - PAUSE when modals are active
+  // Bot turn processing - PAUSED when modals are active
   useEffect(() => {
     if (!gameState || gameState.gamePhase !== 'playing') return;
 
-    // CRITICAL: Pause bot processing when player action modals are active
-    if (showClaimDialog || botAction) return;
+    // 🚨 CRITICAL: Pause bot processing when player action modals are active
+    if (isGamePaused) return;
 
     const currentPlayer = gameState.players[gameState.currentPlayer];
     
@@ -742,7 +748,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
       return () => clearTimeout(timer);
     }
-  }, [gameState, makeBotMove, soundManager, checkBotClaims, showClaimDialog, botAction]);
+  }, [gameState, makeBotMove, soundManager, checkBotClaims, isGamePaused]);
 
   // Auto-close claim dialog after timeout
   useEffect(() => {
@@ -857,17 +863,24 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
               <span className="text-white font-medium">Wall: {gameState.wall.length}</span>
             </div>
-            {isFirstMove && gameState.currentPlayer === 0 && (
+            {/* Game Paused Indicator */}
+            {isGamePaused && (
+              <div className="bg-red-500/20 backdrop-blur-sm border border-red-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
+                <Clock className="w-4 h-4 text-red-400" />
+                <span className="text-red-200 font-medium text-sm">Game Paused</span>
+              </div>
+            )}
+            {isFirstMove && gameState.currentPlayer === 0 && !isGamePaused && (
               <div className="bg-amber-500/20 backdrop-blur-sm border border-amber-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
                 <span className="text-amber-200 font-medium text-sm">First move: Must discard</span>
               </div>
             )}
-            {gameState.lastActionWasClaim && gameState.currentPlayer === 0 && (
+            {gameState.lastActionWasClaim && gameState.currentPlayer === 0 && !isGamePaused && (
               <div className="bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
                 <span className="text-blue-200 font-medium text-sm">After claim: Must discard</span>
               </div>
             )}
-            {needsToDrawFirst && (
+            {needsToDrawFirst && !isGamePaused && (
               <div className="bg-green-500/20 backdrop-blur-sm border border-green-400/30 rounded-lg px-4 py-2 flex items-center space-x-2">
                 <span className="text-green-200 font-medium text-sm">Drawing tile...</span>
               </div>
@@ -898,7 +911,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         </div>
 
         {/* Game Status */}
-        {gameState.gamePhase === 'playing' && (
+        {gameState.gamePhase === 'playing' && !isGamePaused && (
           <div className="text-center mb-6">
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 inline-block">
               <div className="flex items-center justify-center space-x-3">
@@ -910,6 +923,20 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                    needsToDrawFirst ? "Drawing tile automatically..." : "Your turn - Select tile to discard"}
                 </span>
                 {(currentPlayer.isBot || needsToDrawFirst) && <Clock className="w-4 h-4 text-emerald-300 animate-spin" />}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Paused Game Status */}
+        {isGamePaused && (
+          <div className="text-center mb-6">
+            <div className="bg-red-500/20 backdrop-blur-sm border border-red-400/30 rounded-xl p-4 inline-block">
+              <div className="flex items-center justify-center space-x-3">
+                <Clock className="w-5 h-5 text-red-400" />
+                <span className="text-white font-medium text-lg">
+                  Game Paused - Waiting for player decision
+                </span>
               </div>
             </div>
           </div>
@@ -1039,7 +1066,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
 
           {/* Player Actions */}
-          {gameState.gamePhase === 'playing' && gameState.currentPlayer === 0 && !needsToDrawFirst && (
+          {gameState.gamePhase === 'playing' && gameState.currentPlayer === 0 && !needsToDrawFirst && !isGamePaused && (
             <div className="flex justify-center space-x-4 mb-6">
               <button
                 onClick={handleDiscard}
@@ -1058,7 +1085,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           )}
           
           {/* First Move Instructions */}
-          {isFirstMove && gameState.currentPlayer === 0 && gameState.gamePhase === 'playing' && (
+          {isFirstMove && gameState.currentPlayer === 0 && gameState.gamePhase === 'playing' && !isGamePaused && (
             <div className="bg-amber-500/10 border border-amber-400/30 rounded-lg p-4 mb-4">
               <div className="text-center">
                 <p className="text-amber-200 font-medium mb-2">🎯 First Move Rules</p>
@@ -1071,7 +1098,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           )}
 
           {/* After Claim Instructions */}
-          {gameState.lastActionWasClaim && gameState.currentPlayer === 0 && gameState.gamePhase === 'playing' && (
+          {gameState.lastActionWasClaim && gameState.currentPlayer === 0 && gameState.gamePhase === 'playing' && !isGamePaused && (
             <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg p-4 mb-4">
               <div className="text-center">
                 <p className="text-blue-200 font-medium mb-2">🎯 After Claim Rules</p>
@@ -1084,7 +1111,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           )}
 
           {/* Normal Turn Instructions */}
-          {!isFirstMove && !gameState.lastActionWasClaim && gameState.currentPlayer === 0 && gameState.gamePhase === 'playing' && !needsToDrawFirst && (
+          {!isFirstMove && !gameState.lastActionWasClaim && gameState.currentPlayer === 0 && gameState.gamePhase === 'playing' && !needsToDrawFirst && !isGamePaused && (
             <div className="bg-green-500/10 border border-green-400/30 rounded-lg p-4 mb-4">
               <div className="text-center">
                 <p className="text-green-200 font-medium mb-2">🎯 Normal Turn</p>
@@ -1092,7 +1119,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                   You automatically drew a tile at the start of your turn. Now select a tile to discard.
                 </p>
               </div>
-            </div>
+            )}
           )}
           
           {/* Exposed Sets */}
