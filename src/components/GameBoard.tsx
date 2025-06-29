@@ -468,9 +468,16 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
       console.log(`🤖 Bot ${botPlayer.name} hand size: ${botPlayer.hand.length}, lastActionWasClaim: ${newState.lastActionWasClaim}`);
 
-      // FIXED: Proper turn flow logic
+      // FIXED: Proper turn flow logic with better validation
       if (newState.lastActionWasClaim) {
         console.log(`🤖 Bot ${botPlayer.name} must discard after claim`);
+        // After a claim, bot should have 11 tiles (10 from exposed sets + 1 remaining in hand)
+        // But the hand size depends on how many tiles were used in the claim
+        if (botPlayer.hand.length < 10 || botPlayer.hand.length > 14) {
+          console.error(`❌ Bot ${botPlayer.name} has invalid hand size after claim: ${botPlayer.hand.length}`);
+          isProcessing.current = false;
+          return prevState;
+        }
       } else if (botPlayer.hand.length === 13) {
         // Normal turn: draw first, then discard
         if (newState.wall.length === 0) {
@@ -537,14 +544,25 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
           return newState;
         }
-      } else if (botPlayer.hand.length !== 14 && botPlayer.hand.length !== 10 && botPlayer.hand.length !== 11) {
-        // Invalid hand size
-        console.error(`❌ Bot ${botPlayer.name} has invalid hand size: ${botPlayer.hand.length}`);
+      } else {
+        // FIXED: More flexible hand size validation
+        // Valid hand sizes: 14 (after drawing), 10-13 (after claims), or dealer start (14)
+        const validHandSizes = [10, 11, 12, 13, 14];
+        if (!validHandSizes.includes(botPlayer.hand.length)) {
+          console.error(`❌ Bot ${botPlayer.name} has invalid hand size: ${botPlayer.hand.length}`);
+          // Try to recover by skipping this turn
+          isProcessing.current = false;
+          return prevState;
+        }
+      }
+
+      // Now bot must discard (if they have tiles to discard)
+      if (botPlayer.hand.length === 0) {
+        console.error(`❌ Bot ${botPlayer.name} has no tiles to discard`);
         isProcessing.current = false;
         return prevState;
       }
 
-      // Now bot must discard
       console.log(`🤖 Bot ${botPlayer.name} choosing tile to discard from ${botPlayer.hand.length} tiles`);
 
       // Bot AI: Choose tile to discard
