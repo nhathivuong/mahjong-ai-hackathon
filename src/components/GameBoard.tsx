@@ -138,42 +138,54 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   };
 
-  // FIXED: Separate bot claims from human claims
-  const checkForBotClaims = (state: GameState, discardedTile: DiscardedTile): any[] => {
-    const claims: any[] = [];
+  // FIXED: Collect all potential claims and process only the highest priority one
+  const processDiscardClaims = (state: GameState, discardedTile: DiscardedTile): { 
+    botClaim: any | null, 
+    humanClaims: ClaimOption[] 
+  } => {
     const discardingPlayerIndex = state.players.findIndex(p => p.id === discardedTile.playerId);
+    const allClaims: any[] = [];
     
+    // Collect bot claims
     state.players.forEach((player, index) => {
       if (index === discardingPlayerIndex || !player.isBot) return; // Skip discarding player and human players
       
       // Check for win first (highest priority)
       const testHand = [...player.hand, discardedTile.tile];
       if (isWinningHand(testHand, player.exposedSets)) {
-        claims.push({ type: 'win', playerId: player.id, playerIndex: index, priority: 4 });
-        return; // Win takes absolute priority
+        allClaims.push({ 
+          type: 'win', 
+          playerId: player.id, 
+          playerIndex: index, 
+          priority: 4,
+          isBot: true
+        });
+        return; // Win takes absolute priority for this player
       }
       
       // Check for kong (second priority)
       const kongTiles = canFormKong(player.hand, discardedTile.tile);
       if (kongTiles) {
-        claims.push({ 
+        allClaims.push({ 
           type: 'kong', 
           playerId: player.id, 
           playerIndex: index, 
           tiles: kongTiles,
-          priority: 3 
+          priority: 3,
+          isBot: true
         });
       }
       
       // Check for pung (third priority)
       const pungTiles = canFormPung(player.hand, discardedTile.tile);
       if (pungTiles) {
-        claims.push({ 
+        allClaims.push({ 
           type: 'pung', 
           playerId: player.id, 
           playerIndex: index, 
           tiles: pungTiles,
-          priority: 2 
+          priority: 2,
+          isBot: true
         });
       }
       
@@ -181,87 +193,138 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       if (index === (discardingPlayerIndex + 1) % 4) {
         const chowOptions = canFormChow(player.hand, discardedTile.tile);
         if (chowOptions.length > 0) {
-          claims.push({ 
+          allClaims.push({ 
             type: 'chow', 
             playerId: player.id, 
             playerIndex: index, 
             tiles: chowOptions[0],
-            priority: 1 
+            priority: 1,
+            isBot: true
           });
         }
       }
     });
-    
-    // Sort by priority (highest first)
-    return claims.sort((a, b) => b.priority - a.priority);
-  };
 
-  // NEW: Check for human player claims
-  const checkForHumanClaims = (state: GameState, discardedTile: DiscardedTile): ClaimOption[] => {
-    const claims: ClaimOption[] = [];
-    const discardingPlayerIndex = state.players.findIndex(p => p.id === discardedTile.playerId);
+    // Collect human claims
+    const humanClaims: ClaimOption[] = [];
     const humanPlayer = state.players[0]; // Assuming human is always player 0
     
     // Don't allow claiming own discard
-    if (discardingPlayerIndex === 0) return claims;
-    
-    // Check for win first (highest priority)
-    const testHand = [...humanPlayer.hand, discardedTile.tile];
-    if (isWinningHand(testHand, humanPlayer.exposedSets)) {
-      claims.push({
-        type: 'win',
-        tiles: [discardedTile.tile],
-        playerId: humanPlayer.id,
-        playerName: humanPlayer.name,
-        discardedTile: discardedTile.tile
-      });
-    }
-    
-    // Check for kong
-    const kongTiles = canFormKong(humanPlayer.hand, discardedTile.tile);
-    if (kongTiles) {
-      claims.push({
-        type: 'kong',
-        tiles: kongTiles,
-        playerId: humanPlayer.id,
-        playerName: humanPlayer.name,
-        discardedTile: discardedTile.tile
-      });
-    }
-    
-    // Check for pung
-    const pungTiles = canFormPung(humanPlayer.hand, discardedTile.tile);
-    if (pungTiles) {
-      claims.push({
-        type: 'pung',
-        tiles: pungTiles,
-        playerId: humanPlayer.id,
-        playerName: humanPlayer.name,
-        discardedTile: discardedTile.tile
-      });
-    }
-    
-    // Check for chow (only if human is next player)
-    if (0 === (discardingPlayerIndex + 1) % 4) {
-      const chowOptions = canFormChow(humanPlayer.hand, discardedTile.tile);
-      chowOptions.forEach(chowTiles => {
-        claims.push({
-          type: 'chow',
-          tiles: chowTiles,
+    if (discardingPlayerIndex !== 0) {
+      // Check for win first (highest priority)
+      const testHand = [...humanPlayer.hand, discardedTile.tile];
+      if (isWinningHand(testHand, humanPlayer.exposedSets)) {
+        humanClaims.push({
+          type: 'win',
+          tiles: [discardedTile.tile],
           playerId: humanPlayer.id,
           playerName: humanPlayer.name,
           discardedTile: discardedTile.tile
         });
-      });
+        allClaims.push({
+          type: 'win',
+          playerId: humanPlayer.id,
+          playerIndex: 0,
+          priority: 4,
+          isBot: false
+        });
+      }
+      
+      // Check for kong
+      const kongTiles = canFormKong(humanPlayer.hand, discardedTile.tile);
+      if (kongTiles) {
+        humanClaims.push({
+          type: 'kong',
+          tiles: kongTiles,
+          playerId: humanPlayer.id,
+          playerName: humanPlayer.name,
+          discardedTile: discardedTile.tile
+        });
+        allClaims.push({
+          type: 'kong',
+          playerId: humanPlayer.id,
+          playerIndex: 0,
+          tiles: kongTiles,
+          priority: 3,
+          isBot: false
+        });
+      }
+      
+      // Check for pung
+      const pungTiles = canFormPung(humanPlayer.hand, discardedTile.tile);
+      if (pungTiles) {
+        humanClaims.push({
+          type: 'pung',
+          tiles: pungTiles,
+          playerId: humanPlayer.id,
+          playerName: humanPlayer.name,
+          discardedTile: discardedTile.tile
+        });
+        allClaims.push({
+          type: 'pung',
+          playerId: humanPlayer.id,
+          playerIndex: 0,
+          tiles: pungTiles,
+          priority: 2,
+          isBot: false
+        });
+      }
+      
+      // Check for chow (only if human is next player)
+      if (0 === (discardingPlayerIndex + 1) % 4) {
+        const chowOptions = canFormChow(humanPlayer.hand, discardedTile.tile);
+        chowOptions.forEach(chowTiles => {
+          humanClaims.push({
+            type: 'chow',
+            tiles: chowTiles,
+            playerId: humanPlayer.id,
+            playerName: humanPlayer.name,
+            discardedTile: discardedTile.tile
+          });
+          allClaims.push({
+            type: 'chow',
+            playerId: humanPlayer.id,
+            playerIndex: 0,
+            tiles: chowTiles,
+            priority: 1,
+            isBot: false
+          });
+        });
+      }
     }
     
-    return claims;
+    // Sort all claims by priority (highest first), then by turn order for tie-breaking
+    allClaims.sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return b.priority - a.priority; // Higher priority first
+      }
+      // Tie-breaking: closer to discarding player in turn order wins
+      const aDistance = (a.playerIndex - discardingPlayerIndex + 4) % 4;
+      const bDistance = (b.playerIndex - discardingPlayerIndex + 4) % 4;
+      return aDistance - bDistance;
+    });
+
+    // Return the highest priority bot claim (if any) and human claims for UI
+    const topClaim = allClaims.length > 0 ? allClaims[0] : null;
+    const botClaim = topClaim && topClaim.isBot ? topClaim : null;
+    
+    // Only return human claims if no bot has a higher priority claim
+    const finalHumanClaims = (!botClaim || (humanClaims.length > 0 && topClaim && !topClaim.isBot)) ? humanClaims : [];
+    
+    return { botClaim, humanClaims: finalHumanClaims };
   };
 
   // Handle bot claims with proper state management
   const handleBotClaim = (state: GameState, claim: any, discardedTile: DiscardedTile) => {
     const claimingPlayerIndex = claim.playerIndex;
     const claimingPlayer = { ...state.players[claimingPlayerIndex] };
+    
+    // Validate hand size before processing claim
+    const expectedHandSize = 13; // Standard hand size before claiming
+    if (claimingPlayer.hand.length !== expectedHandSize) {
+      console.error(`❌ Bot ${claimingPlayer.name} has invalid hand size for claiming: ${claimingPlayer.hand.length}, expected: ${expectedHandSize}`);
+      return false; // Don't process invalid claim
+    }
     
     // Remove the discarded tile from discard pile
     state.discardPile = state.discardPile.filter(d => d.tile.id !== discardedTile.tile.id);
@@ -288,7 +351,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         !claim.tiles.some((ct: Tile) => ct.id === tile.id)
       );
     } else {
-      return; // Invalid claim type
+      console.error(`❌ Invalid claim type: ${claim.type}`);
+      return false; // Invalid claim type
+    }
+
+    // Validate final hand size
+    const expectedFinalHandSize = expectedHandSize - claim.tiles.length; // Should be 10-11 tiles after claim
+    if (claimingPlayer.hand.length !== expectedFinalHandSize) {
+      console.error(`❌ Bot ${claimingPlayer.name} would have invalid hand size after claim: ${claimingPlayer.hand.length}, expected: ${expectedFinalHandSize}`);
+      return false; // Don't process claim that would result in invalid hand size
     }
 
     // Add to exposed sets and sort hand
@@ -313,6 +384,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setTimeout(() => {
       setBotAction(null);
     }, 1500);
+
+    return true; // Claim processed successfully
   };
 
   // Handle bot win claims
@@ -349,7 +422,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         setShowWinModal(true);
         setBotAction(null);
       }, 2000);
+
+      return true;
     }
+    
+    return false;
   };
 
   // NEW: Handle human claim selection
@@ -471,9 +548,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       // FIXED: Proper turn flow logic with better validation
       if (newState.lastActionWasClaim) {
         console.log(`🤖 Bot ${botPlayer.name} must discard after claim`);
-        // After a claim, bot should have 11 tiles (10 from exposed sets + 1 remaining in hand)
-        // But the hand size depends on how many tiles were used in the claim
-        if (botPlayer.hand.length < 10 || botPlayer.hand.length > 14) {
+        // After a claim, bot should have 10-11 tiles (depending on claim type)
+        if (botPlayer.hand.length < 10 || botPlayer.hand.length > 11) {
           console.error(`❌ Bot ${botPlayer.name} has invalid hand size after claim: ${botPlayer.hand.length}`);
           isProcessing.current = false;
           return prevState;
@@ -546,8 +622,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         }
       } else {
         // FIXED: More flexible hand size validation
-        // Valid hand sizes: 14 (after drawing), 10-13 (after claims), or dealer start (14)
-        const validHandSizes = [10, 11, 12, 13, 14];
+        // Valid hand sizes: 14 (after drawing), 10-11 (after claims), or dealer start (14)
+        const validHandSizes = [10, 11, 14];
         if (!validHandSizes.includes(botPlayer.hand.length)) {
           console.error(`❌ Bot ${botPlayer.name} has invalid hand size: ${botPlayer.hand.length}`);
           // Try to recover by skipping this turn
@@ -607,26 +683,26 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       
       soundManager.playTileSound('discard', getPlayerPosition(botPlayer.id));
 
-      // FIXED: Check for bot claims first, then human claims
-      const botClaims = checkForBotClaims(newState, discardedTile);
+      // FIXED: Use new unified claim processing system
+      const { botClaim, humanClaims } = processDiscardClaims(newState, discardedTile);
       
-      if (botClaims.length > 0) {
-        // Handle the highest priority bot claim
-        const topClaim = botClaims[0];
-        
-        if (topClaim.type === 'win') {
-          handleBotWinClaim(newState, topClaim, discardedTile);
-          isProcessing.current = false;
-          return newState;
+      if (botClaim) {
+        if (botClaim.type === 'win') {
+          const success = handleBotWinClaim(newState, botClaim, discardedTile);
+          if (success) {
+            isProcessing.current = false;
+            return newState;
+          }
         } else {
-          handleBotClaim(newState, topClaim, discardedTile);
-          isProcessing.current = false;
-          return newState;
+          const success = handleBotClaim(newState, botClaim, discardedTile);
+          if (success) {
+            isProcessing.current = false;
+            return newState;
+          }
         }
       }
 
-      // Check for human claims
-      const humanClaims = checkForHumanClaims(newState, discardedTile);
+      // Check for human claims only if no bot claimed
       if (humanClaims.length > 0) {
         setClaimOptions(humanClaims);
         setShowClaimDialog(true);
@@ -737,22 +813,24 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       
       soundManager.playTileSound('discard', 'bottom');
 
-      // FIXED: Only check for bot claims, not human claims on player discard
-      const botClaims = checkForBotClaims(newState, discardedTile);
+      // FIXED: Use new unified claim processing system
+      const { botClaim } = processDiscardClaims(newState, discardedTile);
       
-      if (botClaims.length > 0) {
-        const topClaim = botClaims[0];
-        
-        if (topClaim.type === 'win') {
-          handleBotWinClaim(newState, topClaim, discardedTile);
-          setSelectedTile(null);
-          isProcessing.current = false;
-          return newState;
+      if (botClaim) {
+        if (botClaim.type === 'win') {
+          const success = handleBotWinClaim(newState, botClaim, discardedTile);
+          if (success) {
+            setSelectedTile(null);
+            isProcessing.current = false;
+            return newState;
+          }
         } else {
-          handleBotClaim(newState, topClaim, discardedTile);
-          setSelectedTile(null);
-          isProcessing.current = false;
-          return newState;
+          const success = handleBotClaim(newState, botClaim, discardedTile);
+          if (success) {
+            setSelectedTile(null);
+            isProcessing.current = false;
+            return newState;
+          }
         }
       }
 
