@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bot, BookOpen, Sparkles, Zap } from 'lucide-react';
+import { Bot, BookOpen, Sparkles } from 'lucide-react';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -71,20 +71,20 @@ const HomePage: React.FC = () => {
         <div className="absolute top-1/2 left-1/4 w-16 h-16 bg-pink-400/20 rounded-full blur-xl"></div>
       </div>
 
-      {/* Built with Bolt.new Badge - Fixed Bottom Right */}
+      {/* Official Bolt.new Badge - Fixed Bottom Right */}
       <div className="fixed bottom-4 right-4 z-50">
-        <div className="inline-flex items-center px-4 py-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg text-emerald-200 text-sm hover:bg-white/20 transition-all duration-300">
-          <Zap className="w-4 h-4 mr-2 text-amber-400" />
-          Built with{' '}
-          <a 
-            href="https://bolt.new" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="ml-1 text-amber-400 hover:text-amber-300 font-medium transition-colors hover:underline"
-          >
-            Bolt.new
-          </a>
-        </div>
+        <a 
+          href="https://bolt.new" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="block hover:scale-105 transition-transform duration-200"
+        >
+          <img 
+            src="/logotext_poweredby_360w copy.png" 
+            alt="Powered by Bolt.new" 
+            className="h-8 w-auto opacity-90 hover:opacity-100 transition-opacity duration-200"
+          />
+        </a>
       </div>
     </div>
   );

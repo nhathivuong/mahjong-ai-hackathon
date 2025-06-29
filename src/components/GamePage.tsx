@@ -25,6 +25,22 @@ const GamePage: React.FC = () => {
 
       {/* Game Content */}
       <GameBoard gameMode="bot" />
+
+      {/* Official Bolt.new Badge - Fixed Bottom Right */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <a 
+          href="https://bolt.new" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="block hover:scale-105 transition-transform duration-200"
+        >
+          <img 
+            src="/logotext_poweredby_360w copy.png" 
+            alt="Powered by Bolt.new" 
+            className="h-8 w-auto opacity-90 hover:opacity-100 transition-opacity duration-200"
+          />
+        </a>
+      </div>
     </div>
   );
 };
