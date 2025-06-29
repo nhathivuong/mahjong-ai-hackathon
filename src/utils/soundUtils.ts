@@ -1,4 +1,4 @@
-// Enhanced Sound utility functions for mahjong game with balanced audio
+// Enhanced Sound utility functions for mahjong game with natural wood-like sounds
 export class SoundManager {
   private static instance: SoundManager;
   private audioContext: AudioContext | null = null;
@@ -50,20 +50,21 @@ export class SoundManager {
     return this.isEnabled;
   }
 
-  // Generate balanced tile sound with pleasant frequencies (200-2000 Hz range)
-  private generateTileSound(
-    frequency: number = 800, 
-    duration: number = 0.15,
-    stereoPosition: number = 0 // -1 (left) to 1 (right)
+  // Generate natural wood-like tile sound with organic characteristics
+  private generateWoodTileSound(
+    baseFrequency: number = 180, 
+    duration: number = 0.25,
+    stereoPosition: number = 0,
+    intensity: number = 1.0
   ): AudioBuffer | null {
     if (!this.audioContext) return null;
 
-    // Clamp frequency to pleasant range
-    frequency = Math.max(200, Math.min(2000, frequency));
+    // Use warmer, lower frequencies that resemble wood resonance
+    const frequency = Math.max(80, Math.min(400, baseFrequency));
 
     const sampleRate = this.audioContext.sampleRate;
     const length = sampleRate * duration;
-    const buffer = this.audioContext.createBuffer(2, length, sampleRate); // Stereo
+    const buffer = this.audioContext.createBuffer(2, length, sampleRate);
     const leftData = buffer.getChannelData(0);
     const rightData = buffer.getChannelData(1);
 
@@ -71,20 +72,38 @@ export class SoundManager {
     const leftGain = stereoPosition <= 0 ? 1 : 1 - stereoPosition;
     const rightGain = stereoPosition >= 0 ? 1 : 1 + stereoPosition;
 
-    // Generate pleasant marble-like sound with controlled harmonics
+    // Generate natural wood-like sound with multiple components
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
-      const envelope = Math.exp(-t * 6) * (1 - Math.exp(-t * 30)); // Attack-decay envelope
       
-      // Fundamental frequency with pleasant harmonics
+      // Sharp attack with quick decay (like wood hitting)
+      const attackEnvelope = Math.exp(-t * 15) * (1 - Math.exp(-t * 50));
+      
+      // Main resonant frequency (wood body resonance)
       const fundamental = Math.sin(2 * Math.PI * frequency * t);
-      const harmonic2 = Math.sin(2 * Math.PI * frequency * 1.2 * t) * 0.3;
-      const harmonic3 = Math.sin(2 * Math.PI * frequency * 1.5 * t) * 0.15;
       
-      // Subtle texture noise (much reduced)
-      const noise = (Math.random() - 0.5) * 0.05;
+      // Lower harmonic for wood warmth
+      const subHarmonic = Math.sin(2 * Math.PI * frequency * 0.7 * t) * 0.4;
       
-      const sample = (fundamental + harmonic2 + harmonic3 + noise) * envelope * 0.4;
+      // Higher harmonic for the "click" of contact
+      const clickHarmonic = Math.sin(2 * Math.PI * frequency * 2.1 * t) * 0.2 * Math.exp(-t * 25);
+      
+      // Wood grain texture (filtered noise)
+      const grainNoise = (Math.random() - 0.5) * 0.15 * Math.exp(-t * 8);
+      
+      // Slight frequency modulation for natural variation
+      const vibrato = Math.sin(2 * Math.PI * 3 * t) * 0.02;
+      const modulatedFreq = frequency * (1 + vibrato);
+      const modulated = Math.sin(2 * Math.PI * modulatedFreq * t) * 0.3;
+      
+      // Combine all components
+      const sample = (
+        fundamental * 0.6 + 
+        subHarmonic + 
+        clickHarmonic + 
+        modulated + 
+        grainNoise
+      ) * attackEnvelope * intensity * 0.35;
       
       // Apply stereo positioning
       leftData[i] = sample * leftGain;
@@ -94,11 +113,11 @@ export class SoundManager {
     return buffer;
   }
 
-  // Generate smooth transition sound for game state changes
-  private generateTransitionSound(
-    startFreq: number = 400,
-    endFreq: number = 600,
-    duration: number = 0.3
+  // Generate smooth transition sound with wood-like characteristics
+  private generateWoodTransitionSound(
+    startFreq: number = 150,
+    endFreq: number = 220,
+    duration: number = 0.4
   ): AudioBuffer | null {
     if (!this.audioContext) return null;
 
@@ -111,10 +130,21 @@ export class SoundManager {
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
       const progress = t / duration;
-      const frequency = startFreq + (endFreq - startFreq) * progress;
-      const envelope = Math.sin(Math.PI * progress); // Smooth bell curve
       
-      const sample = Math.sin(2 * Math.PI * frequency * t) * envelope * 0.3;
+      // Smooth frequency transition
+      const frequency = startFreq + (endFreq - startFreq) * progress;
+      
+      // Gentle envelope for smooth transitions
+      const envelope = Math.sin(Math.PI * progress) * 0.8;
+      
+      // Main tone with wood-like harmonics
+      const fundamental = Math.sin(2 * Math.PI * frequency * t);
+      const harmonic = Math.sin(2 * Math.PI * frequency * 1.4 * t) * 0.3;
+      
+      // Subtle wood texture
+      const texture = (Math.random() - 0.5) * 0.08 * envelope;
+      
+      const sample = (fundamental + harmonic + texture) * envelope * 0.25;
       
       leftData[i] = sample;
       rightData[i] = sample;
@@ -153,23 +183,24 @@ export class SoundManager {
   public playTileSound(type: 'draw' | 'discard' | 'claim' = 'discard', position: 'center' | 'left' | 'right' | 'top' | 'bottom' = 'center') {
     if (!this.audioContext || !this.isEnabled) return;
 
-    let frequency: number;
+    let baseFrequency: number;
     let duration: number;
+    let intensity: number;
     let stereoPosition: number = 0;
 
     // Map position to stereo field
     switch (position) {
       case 'left':
-        stereoPosition = -0.7;
+        stereoPosition = -0.6;
         break;
       case 'right':
-        stereoPosition = 0.7;
+        stereoPosition = 0.6;
         break;
       case 'top':
-        stereoPosition = -0.3;
+        stereoPosition = -0.2;
         break;
       case 'bottom':
-        stereoPosition = 0.3;
+        stereoPosition = 0.2;
         break;
       default:
         stereoPosition = 0;
@@ -177,19 +208,22 @@ export class SoundManager {
 
     switch (type) {
       case 'draw':
-        frequency = 500; // Pleasant mid-range
-        duration = 0.12;
+        baseFrequency = 160; // Softer, lower for drawing
+        duration = 0.2;
+        intensity = 0.8;
         break;
       case 'claim':
-        frequency = 800; // Slightly higher for importance
-        duration = 0.18;
+        baseFrequency = 200; // Slightly higher for importance
+        duration = 0.3;
+        intensity = 1.1;
         break;
       default: // discard
-        frequency = 650; // Balanced frequency
-        duration = 0.15;
+        baseFrequency = 180; // Natural wood resonance
+        duration = 0.25;
+        intensity = 1.0;
     }
 
-    const buffer = this.generateTileSound(frequency, duration, stereoPosition);
+    const buffer = this.generateWoodTileSound(baseFrequency, duration, stereoPosition, intensity);
     if (buffer) {
       this.playBuffer(buffer, 1, stereoPosition);
     }
@@ -198,16 +232,16 @@ export class SoundManager {
   public playWinSound() {
     if (!this.audioContext || !this.isEnabled) return;
 
-    // Play a pleasant ascending sequence
-    const frequencies = [440, 554, 659, 880]; // A, C#, E, A (major chord)
+    // Play a pleasant ascending sequence with wood-like tones
+    const frequencies = [150, 180, 220, 280]; // Warmer, lower frequencies
     
     frequencies.forEach((freq, index) => {
       setTimeout(() => {
-        const buffer = this.generateTileSound(freq, 0.4);
+        const buffer = this.generateWoodTileSound(freq, 0.6, 0, 0.9);
         if (buffer) {
           this.playBuffer(buffer, 0.8);
         }
-      }, index * 120);
+      }, index * 150);
     });
   }
 
@@ -215,7 +249,7 @@ export class SoundManager {
     if (!this.audioContext || !this.isEnabled) return;
 
     // Gentle error sound - not harsh
-    const buffer = this.generateTileSound(300, 0.1);
+    const buffer = this.generateWoodTileSound(120, 0.15, 0, 0.7);
     if (buffer) {
       this.playBuffer(buffer, 0.6);
     }
@@ -228,22 +262,22 @@ export class SoundManager {
 
     switch (type) {
       case 'game-start':
-        startFreq = 400;
-        endFreq = 800;
-        duration = 0.5;
+        startFreq = 140;
+        endFreq = 220;
+        duration = 0.6;
         break;
       case 'round-end':
-        startFreq = 800;
-        endFreq = 400;
-        duration = 0.4;
+        startFreq = 220;
+        endFreq = 140;
+        duration = 0.5;
         break;
       default: // turn-change
-        startFreq = 500;
-        endFreq = 600;
-        duration = 0.2;
+        startFreq = 160;
+        endFreq = 190;
+        duration = 0.3;
     }
 
-    const buffer = this.generateTransitionSound(startFreq, endFreq, duration);
+    const buffer = this.generateWoodTransitionSound(startFreq, endFreq, duration);
     if (buffer) {
       this.playBuffer(buffer, 0.7);
     }
