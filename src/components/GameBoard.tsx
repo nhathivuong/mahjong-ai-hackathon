@@ -421,8 +421,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       // Reset claim flag
       newState.lastActionWasClaim = false;
 
-      // Validate hand size for discarding
-      if (botPlayer.hand.length !== 14) {
+      // Validate hand size for discarding - allow for different hand sizes after claims
+      // Normal: 14 tiles (13 + 1 drawn)
+      // After pung/chow: 11 tiles (13 - 2 claimed + 1 discarded = 11 + 1 to discard)
+      // After kong: 10 tiles (13 - 3 claimed + 1 discarded = 10 + 1 to discard)
+      const validHandSizes = [10, 11, 14]; // Valid hand sizes before discarding
+      if (!validHandSizes.includes(botPlayer.hand.length)) {
         console.error(`❌ Bot ${botPlayer.name} has invalid hand size: ${botPlayer.hand.length}`);
         isProcessing.current = false;
         return prevState;
