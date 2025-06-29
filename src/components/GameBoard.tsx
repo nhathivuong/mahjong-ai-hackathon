@@ -10,7 +10,7 @@ interface GameBoardProps {
   gameMode: 'bot' | 'multiplayer';
 }
 
-const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
+export default function GameBoard({ gameMode }: GameBoardProps) {
   const soundManager = SoundManager.getInstance();
 
   // Initialize game state
@@ -1113,6 +1113,4 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       </div>
     </div>
   );
-};
-
-export default GameBoard;
+}
