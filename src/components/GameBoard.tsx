@@ -687,9 +687,10 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
   if (gameState.gamePhase === 'finished') {
     const winner = gameState.players.find(p => p.id === gameState.winner);
     
-    // FIXED: Use the stored winning hand and exposed sets for proper display
+    // FIXED: Combine all tiles into one unified display
     const winningHand = gameState.winningHand || winner?.hand || [];
     const winningExposedSets = gameState.winningExposedSets || winner?.exposedSets || [];
+    const allWinningTiles = [...winningHand, ...winningExposedSets.flat()];
     const handAnalysis = analyzeWinningHand(winningHand, winningExposedSets);
     
     return (
@@ -704,35 +705,12 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-white mb-4">Winning Hand</h3>
             <div className="bg-emerald-800/30 rounded-xl p-4 mb-4">
-              {/* Display exposed sets first */}
-              {winningExposedSets.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-emerald-200 text-sm mb-2">Exposed Sets:</p>
-                  <div className="flex flex-wrap gap-2 justify-center mb-4">
-                    {winningExposedSets.map((set, setIndex) => (
-                      <div key={setIndex} className="flex gap-1 bg-white/10 rounded-lg p-2">
-                        {set.map((tile, tileIndex) => (
-                          <TileComponent
-                            key={`exposed-${setIndex}-${tileIndex}`}
-                            tile={tile}
-                            className="shadow-lg"
-                          />
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Display complete winning hand */}
+              {/* Display all tiles together in one unified view */}
               <div className="mb-4">
-                <p className="text-emerald-200 text-sm mb-2">
-                  {winningExposedSets.length > 0 ? 'Hand Tiles:' : 'Complete Hand:'}
-                </p>
                 <div className="flex flex-wrap gap-2 justify-center">
-                  {winningHand.map((tile, index) => (
+                  {allWinningTiles.map((tile, index) => (
                     <TileComponent
-                      key={`hand-${index}`}
+                      key={`winning-${index}`}
                       tile={tile}
                       className={`shadow-lg ${
                         gameState.claimedTile && tile.id === gameState.claimedTile.id 
@@ -753,7 +731,7 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
                 <p><strong>Hand Type:</strong> {handAnalysis.handType}</p>
                 <p><strong>Win Type:</strong> {gameState.winType === 'self-drawn' ? 'Self-drawn' : 'Claimed'}</p>
                 <p><strong>Score:</strong> {gameState.winScore} points</p>
-                <p><strong>Total Tiles:</strong> {winningHand.length + winningExposedSets.flat().length}</p>
+                <p><strong>Total Tiles:</strong> {allWinningTiles.length}</p>
               </div>
             </div>
           </div>
