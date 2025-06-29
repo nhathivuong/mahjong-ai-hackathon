@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bot, BookOpen, Sparkles } from 'lucide-react';
+import { Bot, BookOpen, Sparkles, Zap } from 'lucide-react';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -55,7 +55,7 @@ const HomePage: React.FC = () => {
         </div>
 
         {/* Rules Button */}
-        <div className="text-center">
+        <div className="text-center mb-12">
           <button
             onClick={() => navigate('/rules')}
             className="inline-flex items-center px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white font-medium hover:bg-white/20 transition-all duration-300 hover:scale-105"
@@ -63,6 +63,22 @@ const HomePage: React.FC = () => {
             <BookOpen className="w-5 h-5 mr-3" />
             Learn the Rules
           </button>
+        </div>
+
+        {/* Built with Bolt.new Credit */}
+        <div className="text-center">
+          <div className="inline-flex items-center px-4 py-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg text-emerald-200 text-sm">
+            <Zap className="w-4 h-4 mr-2 text-amber-400" />
+            Built with{' '}
+            <a 
+              href="https://bolt.new" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="ml-1 text-amber-400 hover:text-amber-300 font-medium transition-colors hover:underline"
+            >
+              Bolt.new
+            </a>
+          </div>
         </div>
 
         {/* Decorative Elements */}
