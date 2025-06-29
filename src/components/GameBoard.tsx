@@ -1,106 +1,52 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { GameState, Player, Tile, DiscardedTile } from '../types/mahjong';
-import { 
-  createTileSet, 
-  shuffleTiles, 
-  sortTiles, 
-  canFormChow, 
-  canFormPung, 
-  canFormKong, 
-  isWinningHand,
-  analyzeWinningHand,
-  calculateWinScore,
-  checkDrawCondition,
-  calculateDrawScores,
-  isOneAwayFromWin
-} from '../utils/tileUtils';
-import { SoundManager } from '../utils/soundUtils';
+import { createTileSet, shuffleTiles, sortTiles, canFormChow, canFormPung, canFormKong, isWinningHand, analyzeWinningHand, isOneAwayFromWin, calculateWinScore, checkDrawCondition, calculateDrawScores } from '../utils/tileUtils';
 import TileComponent from './TileComponent';
-import BotActionIndicator, { BotActionType } from './BotActionIndicator';
 import DiscardHistory from './DiscardHistory';
-import { Settings, Volume2, VolumeX, Trophy, Users, Clock, Shuffle, X } from 'lucide-react';
+import BotActionIndicator, { BotActionType } from './BotActionIndicator';
+import { SoundManager } from '../utils/soundUtils';
 
 interface GameBoardProps {
   gameMode: 'bot' | 'multiplayer';
 }
 
-interface ClaimOption {
-  type: 'chow' | 'pung' | 'kong' | 'win';
-  tiles: Tile[];
-  playerId: string;
-  playerName: string;
-  discardedTile: Tile;
-}
-
-interface BotAction {
-  type: BotActionType;
-  playerName: string;
-  tiles?: Tile[];
-}
-
 const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
-  const [gameState, setGameState] = useState<GameState | null>(null);
-  const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
-  const [claimOptions, setClaimOptions] = useState<ClaimOption[]>([]);
-  const [showClaimDialog, setShowClaimDialog] = useState(false);
-  const [botAction, setBotAction] = useState<BotAction | null>(null);
-  const [showWinModal, setShowWinModal] = useState(false);
-  const [winDetails, setWinDetails] = useState<any>(null);
-  const [showDrawModal, setShowDrawModal] = useState(false);
-  const [drawDetails, setDrawDetails] = useState<any>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [masterVolume, setMasterVolume] = useState(0.7);
-  const [sfxVolume, setSfxVolume] = useState(0.8);
-  const [gameStats, setGameStats] = useState({
-    gamesPlayed: 0,
-    gamesWon: 0,
-    averageScore: 0,
-    bestScore: 0
-  });
-
-  // Simple processing flag to prevent race conditions
-  const isProcessing = useRef(false);
-  const gameStateRef = useRef<GameState | null>(null);
   const soundManager = SoundManager.getInstance();
 
-  // Keep gameStateRef in sync
-  useEffect(() => {
-    gameStateRef.current = gameState;
-  }, [gameState]);
-
-  // Initialize sound settings
-  useEffect(() => {
-    soundManager.setEnabled(soundEnabled);
-    soundManager.setMasterVolume(masterVolume);
-    soundManager.setSfxVolume(sfxVolume);
-  }, [soundEnabled, masterVolume, sfxVolume]);
-
-  const initializeGame = useCallback(() => {
+  // Initialize game state
+  const initializeGame = (): GameState => {
     const tiles = shuffleTiles(createTileSet());
     
     const players: Player[] = [
       { id: 'player1', name: 'You', hand: [], exposedSets: [], score: 0, isDealer: true, isBot: false },
       { id: 'bot1', name: 'East Bot', hand: [], exposedSets: [], score: 0, isDealer: false, isBot: true },
-      { id: 'bot2', name: 'North Bot', hand: [], exposedSets: [], score: 0, isDealer: false, isBot: true },
+      { id: 'bot2', name: 'South Bot', hand: [], exposedSets: [], score: 0, isDealer: false, isBot: true },
       { id: 'bot3', name: 'West Bot', hand: [], exposedSets: [], score: 0, isDealer: false, isBot: true }
     ];
 
-    // Deal tiles - 13 to each player first
+    // Deal 13 tiles to each player
     let tileIndex = 0;
-    players.forEach((player) => {
-      player.hand = sortTiles(tiles.slice(tileIndex, tileIndex + 13));
-      tileIndex += 13;
+    for (let i = 0; i < 13; i++) {
+      players.forEach(player => {
+        if (tileIndex < tiles.length) {
+          player.hand.push(tiles[tileIndex++]);
+        }
+      });
+    }
+
+    // Give dealer (player1) one extra tile
+    if (tileIndex < tiles.length) {
+      players[0].hand.push(tiles[tileIndex++]);
+    }
+
+    // Sort all hands
+    players.forEach(player => {
+      player.hand = sortTiles(player.hand);
     });
 
-    // Give the dealer (player) the 14th tile
-    const dealerIndex = players.findIndex(p => p.isDealer);
-    players[dealerIndex].hand = sortTiles([...players[dealerIndex].hand, tiles[tileIndex]]);
-    tileIndex += 1;
-
-    const newGameState: GameState = {
+    return {
       players,
-      currentPlayer: dealerIndex, // Dealer starts
+      currentPlayer: 0, // Dealer starts
       wall: tiles.slice(tileIndex),
       discardPile: [],
       round: 1,
@@ -108,1416 +54,1057 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       turnNumber: 1,
       lastActionWasClaim: false
     };
+  };
 
-    setGameState(newGameState);
-    setSelectedTile(null);
-    setClaimOptions([]);
-    setShowClaimDialog(false);
-    setBotAction(null);
-    setShowWinModal(false);
-    setShowDrawModal(false);
+  const [gameState, setGameState] = useState<GameState>(initializeGame);
+  const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
+  const [showClaimOptions, setShowClaimOptions] = useState(false);
+  const [claimOptions, setClaimOptions] = useState<{
+    chow: Tile[][];
+    pung: Tile[] | null;
+    kong: Tile[] | null;
+    discardedTile: Tile | null;
+    discardingPlayer: number;
+  }>({ chow: [], pung: null, kong: null, discardedTile: null, discardingPlayer: -1 });
+  const [botAction, setBotAction] = useState<{
+    action: BotActionType;
+    playerName: string;
+    tiles?: Tile[];
+  } | null>(null);
+
+  // Calculate expected hand size based on exposed sets
+  const calculateExpectedHandSize = (player: Player, isCurrentPlayer: boolean = false): { min: number; max: number } => {
+    // Each exposed set reduces hand size by the number of tiles in that set
+    const exposedTileCount = player.exposedSets.reduce((total, set) => total + set.length, 0);
+    const baseHandSize = 14 - exposedTileCount; // Start with 14 total tiles
     
-    // Reset processing flag
-    isProcessing.current = false;
-    
-    soundManager.playTransitionSound('game-start');
-  }, []);
-
-  useEffect(() => {
-    initializeGame();
-  }, [initializeGame]);
-
-  // Get player position for sound positioning
-  const getPlayerPosition = (playerId: string): 'center' | 'left' | 'right' | 'top' | 'bottom' => {
-    switch (playerId) {
-      case 'player1': return 'bottom';
-      case 'bot1': return 'right';
-      case 'bot2': return 'top';
-      case 'bot3': return 'left';
-      default: return 'center';
+    if (isCurrentPlayer) {
+      // Current player should have 14 total tiles (hand + exposed)
+      return { min: baseHandSize, max: baseHandSize };
+    } else {
+      // Non-current players should have 13 total tiles (hand + exposed)
+      return { min: baseHandSize - 1, max: baseHandSize - 1 };
     }
   };
 
-  // FIXED: Collect all potential claims and process only the highest priority one
-  const processDiscardClaims = (state: GameState, discardedTile: DiscardedTile): { 
-    botClaim: any | null, 
-    humanClaims: ClaimOption[] 
-  } => {
-    const discardingPlayerIndex = state.players.findIndex(p => p.id === discardedTile.playerId);
-    const allClaims: any[] = [];
+  // Handle tile selection
+  const handleTileSelect = (tile: Tile) => {
+    if (gameState.currentPlayer !== 0 || gameState.gamePhase !== 'playing') return;
     
-    // Collect bot claims
-    state.players.forEach((player, index) => {
-      if (index === discardingPlayerIndex || !player.isBot) return; // Skip discarding player and human players
+    setSelectedTile(selectedTile?.id === tile.id ? null : tile);
+  };
+
+  // Handle tile discard
+  const handleDiscard = (tile: Tile) => {
+    if (gameState.currentPlayer !== 0 || gameState.gamePhase !== 'playing') return;
+    
+    const currentPlayer = gameState.players[0];
+    const tileIndex = currentPlayer.hand.findIndex(t => t.id === tile.id);
+    if (tileIndex === -1) return;
+
+    // Create new game state
+    const newState = { ...gameState };
+    newState.players = gameState.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets] }));
+    
+    // Remove tile from player's hand
+    newState.players[0].hand.splice(tileIndex, 1);
+    
+    // Add to discard pile
+    const discardedTile: DiscardedTile = {
+      tile,
+      playerId: currentPlayer.id,
+      playerName: currentPlayer.name,
+      turnNumber: gameState.turnNumber
+    };
+    newState.discardPile = [...gameState.discardPile, discardedTile];
+    
+    // Process all potential claims (both human and bot)
+    const claimResult = processDiscardClaims(newState, tile, 0);
+    
+    if (claimResult.hasHumanClaim) {
+      // Show claim options to human player
+      setClaimOptions({
+        chow: claimResult.humanClaimOptions.chow,
+        pung: claimResult.humanClaimOptions.pung,
+        kong: claimResult.humanClaimOptions.kong,
+        discardedTile: tile,
+        discardingPlayer: 0
+      });
+      setShowClaimOptions(true);
+      setGameState(newState);
+    } else if (claimResult.processedClaim) {
+      // Bot claim was processed
+      setGameState(claimResult.newState);
+    } else {
+      // No claims, move to next player
+      newState.currentPlayer = (gameState.currentPlayer + 1) % 4;
+      newState.turnNumber += 1;
+      newState.lastActionWasClaim = false;
+      setGameState(newState);
+    }
+    
+    setSelectedTile(null);
+    soundManager.playTileSound('discard', 'bottom');
+  };
+
+  // Process all potential claims for a discarded tile
+  const processDiscardClaims = (state: GameState, discardedTile: Tile, discardingPlayer: number) => {
+    const claims: Array<{
+      playerId: string;
+      playerIndex: number;
+      type: 'win' | 'kong' | 'pung' | 'chow';
+      tiles: Tile[];
+      priority: number;
+    }> = [];
+
+    // Check each player for potential claims (except the discarding player)
+    for (let i = 0; i < 4; i++) {
+      if (i === discardingPlayer) continue;
       
-      // Check for win first (highest priority)
-      const testHand = [...player.hand, discardedTile.tile];
+      const player = state.players[i];
+      
+      // Validate hand size before processing claims
+      const expectedHandSize = calculateExpectedHandSize(player, false);
+      if (player.hand.length < expectedHandSize.min || player.hand.length > expectedHandSize.max) {
+        console.warn(`⚠️ Player ${player.name} has invalid hand size: ${player.hand.length}, expected: ${expectedHandSize.min}-${expectedHandSize.max}`);
+        continue;
+      }
+
+      // Check for winning claim first
+      const testHand = [...player.hand, discardedTile];
       if (isWinningHand(testHand, player.exposedSets)) {
-        allClaims.push({ 
-          type: 'win', 
-          playerId: player.id, 
-          playerIndex: index, 
-          priority: 4,
-          isBot: true
+        claims.push({
+          playerId: player.id,
+          playerIndex: i,
+          type: 'win',
+          tiles: [discardedTile],
+          priority: 1000 + (4 - i) // Highest priority, with turn order tiebreaker
         });
-        return; // Win takes absolute priority for this player
+        continue; // Win claim takes precedence over other claims
       }
-      
-      // Check for kong (second priority)
-      const kongTiles = canFormKong(player.hand, discardedTile.tile);
+
+      // Check for kong
+      const kongTiles = canFormKong(player.hand, discardedTile);
       if (kongTiles) {
-        allClaims.push({ 
-          type: 'kong', 
-          playerId: player.id, 
-          playerIndex: index, 
-          tiles: kongTiles,
-          priority: 3,
-          isBot: true
+        claims.push({
+          playerId: player.id,
+          playerIndex: i,
+          type: 'kong',
+          tiles: [discardedTile, ...kongTiles],
+          priority: 100 + (4 - i)
         });
       }
-      
-      // Check for pung (third priority)
-      const pungTiles = canFormPung(player.hand, discardedTile.tile);
+
+      // Check for pung
+      const pungTiles = canFormPung(player.hand, discardedTile);
       if (pungTiles) {
-        allClaims.push({ 
-          type: 'pung', 
-          playerId: player.id, 
-          playerIndex: index, 
-          tiles: pungTiles,
-          priority: 2,
-          isBot: true
+        claims.push({
+          playerId: player.id,
+          playerIndex: i,
+          type: 'pung',
+          tiles: [discardedTile, ...pungTiles],
+          priority: 50 + (4 - i)
         });
       }
-      
-      // Check for chow (lowest priority, only next player)
-      if (index === (discardingPlayerIndex + 1) % 4) {
-        const chowOptions = canFormChow(player.hand, discardedTile.tile);
-        if (chowOptions.length > 0) {
-          allClaims.push({ 
-            type: 'chow', 
-            playerId: player.id, 
-            playerIndex: index, 
-            tiles: chowOptions[0],
-            priority: 1,
-            isBot: true
+
+      // Check for chow (only from previous player)
+      const prevPlayer = (discardingPlayer + 3) % 4;
+      if (i === prevPlayer) {
+        const chowTiles = canFormChow(player.hand, discardedTile);
+        if (chowTiles.length > 0) {
+          claims.push({
+            playerId: player.id,
+            playerIndex: i,
+            type: 'chow',
+            tiles: [discardedTile, ...chowTiles[0]], // Take first chow option
+            priority: 10 + (4 - i)
           });
         }
       }
-    });
+    }
 
-    // Collect human claims
-    const humanClaims: ClaimOption[] = [];
-    const humanPlayer = state.players[0]; // Assuming human is always player 0
-    
-    // Don't allow claiming own discard
-    if (discardingPlayerIndex !== 0) {
-      // Check for win first (highest priority)
-      const testHand = [...humanPlayer.hand, discardedTile.tile];
-      if (isWinningHand(testHand, humanPlayer.exposedSets)) {
-        humanClaims.push({
-          type: 'win',
-          tiles: [discardedTile.tile],
-          playerId: humanPlayer.id,
-          playerName: humanPlayer.name,
-          discardedTile: discardedTile.tile
-        });
-        allClaims.push({
-          type: 'win',
-          playerId: humanPlayer.id,
-          playerIndex: 0,
-          priority: 4,
-          isBot: false
-        });
-      }
+    // Sort claims by priority (highest first)
+    claims.sort((a, b) => b.priority - a.priority);
+
+    // Check if human player has any claims
+    const humanClaims = claims.filter(claim => claim.playerIndex === 0);
+    const humanClaimOptions = {
+      chow: [] as Tile[][],
+      pung: null as Tile[] | null,
+      kong: null as Tile[] | null
+    };
+
+    if (humanClaims.length > 0) {
+      // Prepare human claim options
+      const humanPlayer = state.players[0];
       
       // Check for kong
-      const kongTiles = canFormKong(humanPlayer.hand, discardedTile.tile);
+      const kongTiles = canFormKong(humanPlayer.hand, discardedTile);
       if (kongTiles) {
-        humanClaims.push({
-          type: 'kong',
-          tiles: kongTiles,
-          playerId: humanPlayer.id,
-          playerName: humanPlayer.name,
-          discardedTile: discardedTile.tile
-        });
-        allClaims.push({
-          type: 'kong',
-          playerId: humanPlayer.id,
-          playerIndex: 0,
-          tiles: kongTiles,
-          priority: 3,
-          isBot: false
-        });
+        humanClaimOptions.kong = kongTiles;
       }
       
       // Check for pung
-      const pungTiles = canFormPung(humanPlayer.hand, discardedTile.tile);
+      const pungTiles = canFormPung(humanPlayer.hand, discardedTile);
       if (pungTiles) {
-        humanClaims.push({
-          type: 'pung',
-          tiles: pungTiles,
-          playerId: humanPlayer.id,
-          playerName: humanPlayer.name,
-          discardedTile: discardedTile.tile
-        });
-        allClaims.push({
-          type: 'pung',
-          playerId: humanPlayer.id,
-          playerIndex: 0,
-          tiles: pungTiles,
-          priority: 2,
-          isBot: false
-        });
+        humanClaimOptions.pung = pungTiles;
       }
       
-      // Check for chow (only if human is next player)
-      if (0 === (discardingPlayerIndex + 1) % 4) {
-        const chowOptions = canFormChow(humanPlayer.hand, discardedTile.tile);
-        chowOptions.forEach(chowTiles => {
-          humanClaims.push({
-            type: 'chow',
-            tiles: chowTiles,
-            playerId: humanPlayer.id,
-            playerName: humanPlayer.name,
-            discardedTile: discardedTile.tile
-          });
-          allClaims.push({
-            type: 'chow',
-            playerId: humanPlayer.id,
-            playerIndex: 0,
-            tiles: chowTiles,
-            priority: 1,
-            isBot: false
-          });
-        });
-      }
-    }
-    
-    // Sort all claims by priority (highest first), then by turn order for tie-breaking
-    allClaims.sort((a, b) => {
-      if (a.priority !== b.priority) {
-        return b.priority - a.priority; // Higher priority first
-      }
-      // Tie-breaking: closer to discarding player in turn order wins
-      const aDistance = (a.playerIndex - discardingPlayerIndex + 4) % 4;
-      const bDistance = (b.playerIndex - discardingPlayerIndex + 4) % 4;
-      return aDistance - bDistance;
-    });
-
-    // Return the highest priority bot claim (if any) and human claims for UI
-    const topClaim = allClaims.length > 0 ? allClaims[0] : null;
-    const botClaim = topClaim && topClaim.isBot ? topClaim : null;
-    
-    // Only return human claims if no bot has a higher priority claim
-    const finalHumanClaims = (!botClaim || (humanClaims.length > 0 && topClaim && !topClaim.isBot)) ? humanClaims : [];
-    
-    return { botClaim, humanClaims: finalHumanClaims };
-  };
-
-  // Handle bot claims with proper state management
-  const handleBotClaim = (state: GameState, claim: any, discardedTile: DiscardedTile) => {
-    const claimingPlayerIndex = claim.playerIndex;
-    const claimingPlayer = { ...state.players[claimingPlayerIndex] };
-    
-    // Validate hand size before processing claim
-    const expectedHandSize = 13; // Standard hand size before claiming
-    if (claimingPlayer.hand.length !== expectedHandSize) {
-      console.error(`❌ Bot ${claimingPlayer.name} has invalid hand size for claiming: ${claimingPlayer.hand.length}, expected: ${expectedHandSize}`);
-      return false; // Don't process invalid claim
-    }
-    
-    // Remove the discarded tile from discard pile
-    state.discardPile = state.discardPile.filter(d => d.tile.id !== discardedTile.tile.id);
-    
-    // Form the set based on claim type
-    let claimedSet: Tile[];
-    
-    if (claim.type === 'kong') {
-      // Kong: 3 matching tiles from hand + 1 discarded tile = 4 tiles total
-      claimedSet = [...claim.tiles, discardedTile.tile];
-      claimingPlayer.hand = claimingPlayer.hand.filter(tile => 
-        !claim.tiles.some((ct: Tile) => ct.id === tile.id)
-      );
-    } else if (claim.type === 'pung') {
-      // Pung: 2 matching tiles from hand + 1 discarded tile = 3 tiles total
-      claimedSet = [...claim.tiles, discardedTile.tile];
-      claimingPlayer.hand = claimingPlayer.hand.filter(tile => 
-        !claim.tiles.some((ct: Tile) => ct.id === tile.id)
-      );
-    } else if (claim.type === 'chow') {
-      // Chow: 2 sequence tiles from hand + 1 discarded tile = 3 tiles total
-      claimedSet = [...claim.tiles, discardedTile.tile];
-      claimingPlayer.hand = claimingPlayer.hand.filter(tile => 
-        !claim.tiles.some((ct: Tile) => ct.id === tile.id)
-      );
-    } else {
-      console.error(`❌ Invalid claim type: ${claim.type}`);
-      return false; // Invalid claim type
-    }
-
-    // Validate final hand size
-    const expectedFinalHandSize = expectedHandSize - claim.tiles.length; // Should be 10-11 tiles after claim
-    if (claimingPlayer.hand.length !== expectedFinalHandSize) {
-      console.error(`❌ Bot ${claimingPlayer.name} would have invalid hand size after claim: ${claimingPlayer.hand.length}, expected: ${expectedFinalHandSize}`);
-      return false; // Don't process claim that would result in invalid hand size
-    }
-
-    // Add to exposed sets and sort hand
-    claimingPlayer.exposedSets.push(claimedSet);
-    claimingPlayer.hand = sortTiles(claimingPlayer.hand);
-    
-    // Update state
-    state.players[claimingPlayerIndex] = claimingPlayer;
-    state.currentPlayer = claimingPlayerIndex;
-    state.lastActionWasClaim = true;
-    
-    // Show bot action indicator
-    setBotAction({
-      type: claim.type,
-      playerName: claimingPlayer.name,
-      tiles: claimedSet
-    });
-
-    soundManager.playTileSound('claim', getPlayerPosition(claimingPlayer.id));
-    
-    // Clear bot action after delay
-    setTimeout(() => {
-      setBotAction(null);
-    }, 1500);
-
-    return true; // Claim processed successfully
-  };
-
-  // Handle bot win claims
-  const handleBotWinClaim = (state: GameState, claim: any, discardedTile: DiscardedTile) => {
-    const winningPlayer = state.players[claim.playerIndex];
-    const testHand = [...winningPlayer.hand, discardedTile.tile];
-    
-    if (isWinningHand(testHand, winningPlayer.exposedSets)) {
-      const analysis = analyzeWinningHand(testHand, winningPlayer.exposedSets);
-      const score = calculateWinScore(testHand, winningPlayer.exposedSets, 'claimed', winningPlayer.isDealer);
-      
-      setBotAction({
-        type: 'win',
-        playerName: winningPlayer.name,
-        tiles: analysis.allTiles
-      });
-
-      setWinDetails({
-        winner: winningPlayer.name,
-        winType: 'claimed',
-        score,
-        analysis,
-        allPlayers: state.players
-      });
-
-      state.gamePhase = 'finished';
-      state.winner = winningPlayer.id;
-      state.winType = 'claimed';
-      state.winScore = score;
-
-      soundManager.playWinSound();
-      
-      setTimeout(() => {
-        setShowWinModal(true);
-        setBotAction(null);
-      }, 2000);
-
-      return true;
-    }
-    
-    return false;
-  };
-
-  // NEW: Handle human claim selection
-  const handleHumanClaim = (claimOption: ClaimOption) => {
-    if (!gameState) return;
-
-    setGameState(prevState => {
-      if (!prevState) return prevState;
-
-      const newState = { ...prevState };
-      const humanPlayer = { ...newState.players[0] };
-      
-      // Handle win claim
-      if (claimOption.type === 'win') {
-        const testHand = [...humanPlayer.hand, claimOption.discardedTile];
-        const analysis = analyzeWinningHand(testHand, humanPlayer.exposedSets);
-        const score = calculateWinScore(testHand, humanPlayer.exposedSets, 'claimed', humanPlayer.isDealer);
-        
-        setWinDetails({
-          winner: humanPlayer.name,
-          winType: 'claimed',
-          score,
-          analysis,
-          allPlayers: newState.players
-        });
-
-        newState.gamePhase = 'finished';
-        newState.winner = humanPlayer.id;
-        newState.winType = 'claimed';
-        newState.winScore = score;
-
-        soundManager.playWinSound();
-        setTimeout(() => setShowWinModal(true), 500);
-        
-        return newState;
-      }
-
-      // Handle other claims (kong, pung, chow)
-      // Remove the discarded tile from discard pile
-      newState.discardPile = newState.discardPile.filter(d => d.tile.id !== claimOption.discardedTile.id);
-      
-      // Form the set
-      const claimedSet = [...claimOption.tiles, claimOption.discardedTile];
-      
-      // Remove tiles from hand
-      humanPlayer.hand = humanPlayer.hand.filter(tile => 
-        !claimOption.tiles.some(ct => ct.id === tile.id)
-      );
-      
-      // Add to exposed sets
-      humanPlayer.exposedSets.push(claimedSet);
-      humanPlayer.hand = sortTiles(humanPlayer.hand);
-      
-      // Update state
-      newState.players[0] = humanPlayer;
-      newState.currentPlayer = 0; // Human player's turn to discard
-      newState.lastActionWasClaim = true;
-      
-      soundManager.playTileSound('claim', 'bottom');
-      
-      return newState;
-    });
-
-    // Close claim dialog
-    setShowClaimDialog(false);
-    setClaimOptions([]);
-  };
-
-  // NEW: Handle declining claims
-  const handleDeclineClaim = () => {
-    setShowClaimDialog(false);
-    setClaimOptions([]);
-    
-    // Continue with normal game flow - move to next player
-    if (gameState) {
-      setGameState(prevState => {
-        if (!prevState) return prevState;
-        
-        const newState = { ...prevState };
-        newState.currentPlayer = (newState.currentPlayer + 1) % 4;
-        newState.turnNumber++;
-        
-        soundManager.playTransitionSound('turn-change');
-        return newState;
-      });
-    }
-  };
-
-  // Execute bot turn with proper async handling
-  const executeBotTurn = useCallback(async () => {
-    if (isProcessing.current) return;
-
-    const currentState = gameStateRef.current;
-    if (!currentState || currentState.gamePhase !== 'playing') return;
-
-    const currentPlayer = currentState.players[currentState.currentPlayer];
-    if (!currentPlayer.isBot) return;
-
-    isProcessing.current = true;
-    console.log(`🤖 Bot ${currentPlayer.name} starting turn`);
-
-    // Add delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    setGameState(prevState => {
-      if (!prevState || 
-          prevState.gamePhase !== 'playing' || 
-          !prevState.players[prevState.currentPlayer].isBot) {
-        isProcessing.current = false;
-        return prevState;
-      }
-
-      const newState = { ...prevState };
-      const botPlayer = { ...newState.players[newState.currentPlayer] };
-      const botPlayerIndex = newState.currentPlayer;
-
-      console.log(`🤖 Bot ${botPlayer.name} hand size: ${botPlayer.hand.length}, lastActionWasClaim: ${newState.lastActionWasClaim}`);
-
-      // FIXED: Proper turn flow logic with better validation
-      if (newState.lastActionWasClaim) {
-        console.log(`🤖 Bot ${botPlayer.name} must discard after claim`);
-        // After a claim, bot should have 10-11 tiles (depending on claim type)
-        if (botPlayer.hand.length < 10 || botPlayer.hand.length > 11) {
-          console.error(`❌ Bot ${botPlayer.name} has invalid hand size after claim: ${botPlayer.hand.length}`);
-          isProcessing.current = false;
-          return prevState;
+      // Check for chow (only from previous player)
+      const prevPlayer = (discardingPlayer + 3) % 4;
+      if (0 === prevPlayer) {
+        const chowTiles = canFormChow(humanPlayer.hand, discardedTile);
+        if (chowTiles.length > 0) {
+          humanClaimOptions.chow = chowTiles;
         }
-      } else if (botPlayer.hand.length === 13) {
-        // Normal turn: draw first, then discard
-        if (newState.wall.length === 0) {
-          const drawCondition = checkDrawCondition(newState.wall.length, newState.turnNumber);
-          if (drawCondition) {
-            const finalScores = calculateDrawScores(newState.players);
-            setDrawDetails({
-              reason: drawCondition,
-              finalScores,
-              players: newState.players
-            });
-            newState.gamePhase = 'draw';
-            newState.drawReason = drawCondition;
-            newState.finalScores = finalScores;
-            
-            setTimeout(() => {
-              setShowDrawModal(true);
-              isProcessing.current = false;
-            }, 1000);
-            
-            return newState;
-          }
-        }
+      }
 
-        // Draw a tile
-        const drawnTile = newState.wall[0];
-        botPlayer.hand = sortTiles([...botPlayer.hand, drawnTile]);
-        newState.wall = newState.wall.slice(1);
+      return {
+        hasHumanClaim: true,
+        humanClaimOptions,
+        processedClaim: false,
+        newState: state
+      };
+    }
+
+    // Process the highest priority bot claim
+    if (claims.length > 0) {
+      const topClaim = claims[0];
+      const claimingPlayer = state.players[topClaim.playerIndex];
+      
+      // Create new state for the claim
+      const newState = { ...state };
+      newState.players = state.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets.map(set => [...set])] }));
+      
+      if (topClaim.type === 'win') {
+        // Handle win
+        setBotAction({
+          action: 'win',
+          playerName: claimingPlayer.name,
+          tiles: [discardedTile, ...claimingPlayer.hand.slice(0, 4)]
+        });
         
-        console.log(`🤖 Bot ${botPlayer.name} drew tile, hand size now: ${botPlayer.hand.length}`);
-        soundManager.playTileSound('draw', getPlayerPosition(botPlayer.id));
-
-        // Check win after drawing
-        if (isWinningHand(botPlayer.hand, botPlayer.exposedSets)) {
-          const analysis = analyzeWinningHand(botPlayer.hand, botPlayer.exposedSets);
-          const score = calculateWinScore(botPlayer.hand, botPlayer.exposedSets, 'self-drawn', botPlayer.isDealer);
-          
-          setBotAction({
-            type: 'win',
-            playerName: botPlayer.name,
-            tiles: analysis.allTiles
-          });
-
-          setWinDetails({
-            winner: botPlayer.name,
-            winType: 'self-drawn',
-            score,
-            analysis,
-            allPlayers: newState.players
-          });
-
+        setTimeout(() => {
           newState.gamePhase = 'finished';
-          newState.winner = botPlayer.id;
-          newState.winType = 'self-drawn';
-          newState.winScore = score;
-
+          newState.winner = claimingPlayer.id;
+          newState.winType = 'claimed';
+          newState.winScore = calculateWinScore([...claimingPlayer.hand, discardedTile], claimingPlayer.exposedSets, 'claimed', claimingPlayer.isDealer);
+          setGameState(newState);
+          setBotAction(null);
           soundManager.playWinSound();
-          
-          setTimeout(() => {
-            setShowWinModal(true);
-            setBotAction(null);
-            isProcessing.current = false;
-          }, 2000);
-
-          return newState;
-        }
+        }, 2000);
       } else {
-        // FIXED: More flexible hand size validation
-        // Valid hand sizes: 14 (after drawing), 10-11 (after claims), or dealer start (14)
-        const validHandSizes = [10, 11, 14];
-        if (!validHandSizes.includes(botPlayer.hand.length)) {
-          console.error(`❌ Bot ${botPlayer.name} has invalid hand size: ${botPlayer.hand.length}`);
-          // Try to recover by skipping this turn
-          isProcessing.current = false;
-          return prevState;
-        }
+        // Handle other claims (kong, pung, chow)
+        const player = newState.players[topClaim.playerIndex];
+        
+        // Remove tiles from player's hand
+        const tilesToRemove = topClaim.tiles.slice(1); // Exclude discarded tile
+        tilesToRemove.forEach(tile => {
+          const index = player.hand.findIndex(t => t.id === tile.id);
+          if (index !== -1) {
+            player.hand.splice(index, 1);
+          }
+        });
+        
+        // Create exposed set
+        player.exposedSets.push([...topClaim.tiles]);
+        
+        // Remove the discarded tile from discard pile
+        newState.discardPile = newState.discardPile.slice(0, -1);
+        
+        // Set current player to the claiming player
+        newState.currentPlayer = topClaim.playerIndex;
+        newState.lastActionWasClaim = true;
+        
+        // Sort the claiming player's hand
+        player.hand = sortTiles(player.hand);
+        
+        // Show bot action
+        setBotAction({
+          action: topClaim.type as BotActionType,
+          playerName: claimingPlayer.name,
+          tiles: topClaim.tiles
+        });
+        
+        setTimeout(() => setBotAction(null), 1500);
+        
+        soundManager.playTileSound('claim', 'center');
       }
-
-      // Now bot must discard (if they have tiles to discard)
-      if (botPlayer.hand.length === 0) {
-        console.error(`❌ Bot ${botPlayer.name} has no tiles to discard`);
-        isProcessing.current = false;
-        return prevState;
-      }
-
-      console.log(`🤖 Bot ${botPlayer.name} choosing tile to discard from ${botPlayer.hand.length} tiles`);
-
-      // Bot AI: Choose tile to discard
-      const winningTiles = isOneAwayFromWin(botPlayer.hand, botPlayer.exposedSets);
-      let tileToDiscard: Tile;
-
-      if (winningTiles.length > 0) {
-        // Bot is close to winning, discard carefully
-        const safeTiles = botPlayer.hand.filter(tile => 
-          !winningTiles.some(wt => 
-            wt.type === tile.type && 
-            wt.value === tile.value && 
-            wt.dragon === tile.dragon && 
-            wt.wind === tile.wind
-          )
-        );
-        tileToDiscard = safeTiles.length > 0 ? safeTiles[0] : botPlayer.hand[0];
-      } else {
-        // Random discard
-        tileToDiscard = botPlayer.hand[Math.floor(Math.random() * botPlayer.hand.length)];
-      }
-
-      // Remove tile from bot's hand
-      botPlayer.hand = botPlayer.hand.filter(tile => tile.id !== tileToDiscard.id);
       
-      console.log(`🤖 Bot ${botPlayer.name} discarded tile, hand size now: ${botPlayer.hand.length}`);
-
-      // Create discard entry
-      const discardedTile: DiscardedTile = {
-        tile: tileToDiscard,
-        playerId: botPlayer.id,
-        playerName: botPlayer.name,
-        turnNumber: newState.turnNumber
+      return {
+        hasHumanClaim: false,
+        humanClaimOptions,
+        processedClaim: true,
+        newState
       };
-      
-      // Add to discard pile and update player
-      newState.discardPile = [...newState.discardPile, discardedTile];
-      newState.players[botPlayerIndex] = botPlayer;
-      
-      // Reset claim flag after processing
-      newState.lastActionWasClaim = false;
-      
-      soundManager.playTileSound('discard', getPlayerPosition(botPlayer.id));
+    }
 
-      // FIXED: Use new unified claim processing system
-      const { botClaim, humanClaims } = processDiscardClaims(newState, discardedTile);
-      
-      if (botClaim) {
-        if (botClaim.type === 'win') {
-          const success = handleBotWinClaim(newState, botClaim, discardedTile);
-          if (success) {
-            isProcessing.current = false;
-            return newState;
-          }
-        } else {
-          const success = handleBotClaim(newState, botClaim, discardedTile);
-          if (success) {
-            isProcessing.current = false;
-            return newState;
-          }
+    return {
+      hasHumanClaim: false,
+      humanClaimOptions,
+      processedClaim: false,
+      newState: state
+    };
+  };
+
+  // Handle claim action (human player only)
+  const handleClaim = (action: 'chow' | 'pung' | 'kong', tiles?: Tile[]) => {
+    if (!claimOptions.discardedTile) return;
+
+    const newState = { ...gameState };
+    newState.players = gameState.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets.map(set => [...set])] }));
+    
+    // Human player is claiming
+    const claimingPlayer = 0;
+    const player = newState.players[claimingPlayer];
+    
+    // Remove tiles from player's hand and create exposed set
+    if (action === 'chow' && tiles) {
+      // Remove the two tiles from hand
+      tiles.forEach(tile => {
+        const index = player.hand.findIndex(t => t.id === tile.id);
+        if (index !== -1) {
+          player.hand.splice(index, 1);
         }
+      });
+      // Create exposed set with discarded tile + hand tiles
+      const exposedSet = [claimOptions.discardedTile, ...tiles];
+      player.exposedSets.push(exposedSet);
+    } else if (action === 'pung') {
+      const pungTiles = canFormPung(player.hand, claimOptions.discardedTile);
+      if (pungTiles) {
+        // Remove 2 matching tiles from hand
+        pungTiles.forEach(tile => {
+          const index = player.hand.findIndex(t => t.id === tile.id);
+          if (index !== -1) {
+            player.hand.splice(index, 1);
+          }
+        });
+        // Create exposed set
+        const exposedSet = [claimOptions.discardedTile, ...pungTiles];
+        player.exposedSets.push(exposedSet);
       }
+    } else if (action === 'kong') {
+      const kongTiles = canFormKong(player.hand, claimOptions.discardedTile);
+      if (kongTiles) {
+        // Remove 3 matching tiles from hand
+        kongTiles.forEach(tile => {
+          const index = player.hand.findIndex(t => t.id === tile.id);
+          if (index !== -1) {
+            player.hand.splice(index, 1);
+          }
+        });
+        // Create exposed set
+        const exposedSet = [claimOptions.discardedTile, ...kongTiles];
+        player.exposedSets.push(exposedSet);
+      }
+    }
+    
+    // Remove the discarded tile from discard pile (it's been claimed)
+    newState.discardPile = newState.discardPile.slice(0, -1);
+    
+    // Set current player to the claiming player
+    newState.currentPlayer = claimingPlayer;
+    newState.lastActionWasClaim = true;
+    
+    // Sort the claiming player's hand
+    player.hand = sortTiles(player.hand);
+    
+    setGameState(newState);
+    setShowClaimOptions(false);
+    setClaimOptions({ chow: [], pung: null, kong: null, discardedTile: null, discardingPlayer: -1 });
+    
+    soundManager.playTileSound('claim', 'center');
+  };
 
-      // Check for human claims only if no bot claimed
-      if (humanClaims.length > 0) {
-        setClaimOptions(humanClaims);
-        setShowClaimDialog(true);
-        isProcessing.current = false;
+  // Skip claim
+  const handleSkipClaim = () => {
+    // When human skips, check if any bots can claim
+    const claimResult = processDiscardClaims(gameState, claimOptions.discardedTile!, claimOptions.discardingPlayer);
+    
+    if (claimResult.processedClaim) {
+      // Bot claimed the tile
+      setGameState(claimResult.newState);
+    } else {
+      // No one claimed, move to next player
+      const newState = { ...gameState };
+      newState.currentPlayer = (gameState.currentPlayer + 1) % 4;
+      newState.turnNumber += 1;
+      newState.lastActionWasClaim = false;
+      setGameState(newState);
+    }
+    
+    setShowClaimOptions(false);
+    setClaimOptions({ chow: [], pung: null, kong: null, discardedTile: null, discardingPlayer: -1 });
+  };
+
+  // Draw tile for current player
+  const drawTile = (state: GameState): GameState => {
+    if (state.wall.length === 0) return state;
+    
+    const newState = { ...state };
+    newState.players = state.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets] }));
+    newState.wall = [...state.wall];
+    
+    const drawnTile = newState.wall.pop()!;
+    newState.players[state.currentPlayer].hand.push(drawnTile);
+    newState.players[state.currentPlayer].hand = sortTiles(newState.players[state.currentPlayer].hand);
+    
+    return newState;
+  };
+
+  // Execute bot turn
+  const executeBotTurn = useCallback((state: GameState): GameState => {
+    try {
+      const currentPlayer = state.players[state.currentPlayer];
+      
+      let newState = { ...state };
+      
+      // If player doesn't have enough tiles and it's not due to claims, draw a tile
+      const expectedHandSize = calculateExpectedHandSize(currentPlayer, true);
+      if (!state.lastActionWasClaim && currentPlayer.hand.length < expectedHandSize.min && state.wall.length > 0) {
+        newState = drawTile(newState);
+      }
+      
+      const player = newState.players[newState.currentPlayer];
+      
+      // Check for winning hand
+      if (isWinningHand(player.hand, player.exposedSets)) {
+        setBotAction({
+          action: 'win',
+          playerName: player.name,
+          tiles: player.hand.slice(0, 5) // Show first 5 tiles
+        });
+        
+        setTimeout(() => {
+          newState.gamePhase = 'finished';
+          newState.winner = player.id;
+          newState.winType = 'self-drawn';
+          newState.winScore = calculateWinScore(player.hand, player.exposedSets, 'self-drawn', player.isDealer);
+          setGameState(newState);
+          setBotAction(null);
+          soundManager.playWinSound();
+        }, 2000);
+        
         return newState;
       }
-
-      // Move to next player and increment turn
-      newState.currentPlayer = (newState.currentPlayer + 1) % 4;
-      newState.turnNumber++;
-
-      // Check for draw conditions
-      const drawCondition = checkDrawCondition(newState.wall.length, newState.turnNumber);
-      if (drawCondition) {
-        const finalScores = calculateDrawScores(newState.players);
-        setDrawDetails({
-          reason: drawCondition,
-          finalScores,
-          players: newState.players
-        });
-        newState.gamePhase = 'draw';
-        newState.drawReason = drawCondition;
-        newState.finalScores = finalScores;
+      
+      // Simple bot AI: discard a random tile
+      if (player.hand.length > 0) {
+        const randomIndex = Math.floor(Math.random() * player.hand.length);
+        const tileToDiscard = player.hand[randomIndex];
         
-        setTimeout(() => {
-          setShowDrawModal(true);
-          isProcessing.current = false;
-        }, 1000);
-      } else {
-        isProcessing.current = false;
-      }
-
-      soundManager.playTransitionSound('turn-change');
-      return newState;
-    });
-  }, []);
-
-  // Trigger bot turns
-  useEffect(() => {
-    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current || showClaimDialog) {
-      return;
-    }
-
-    const currentPlayer = gameState.players[gameState.currentPlayer];
-    if (currentPlayer.isBot) {
-      executeBotTurn();
-    }
-  }, [gameState?.currentPlayer, gameState?.gamePhase, showClaimDialog, executeBotTurn]);
-
-  // Handle player tile selection and discard
-  const handleTileClick = (tile: Tile) => {
-    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current || showClaimDialog) return;
-    
-    const currentPlayer = gameState.players[gameState.currentPlayer];
-    if (currentPlayer.isBot) return;
-
-    if (selectedTile?.id === tile.id) {
-      setSelectedTile(null);
-    } else {
-      setSelectedTile(tile);
-    }
-  };
-
-  // Handle player discard
-  const handleDiscard = () => {
-    if (!gameState || !selectedTile || gameState.gamePhase !== 'playing' || isProcessing.current || showClaimDialog) return;
-    
-    const currentPlayer = gameState.players[gameState.currentPlayer];
-    if (currentPlayer.isBot) return;
-
-    // FIXED: Proper discard validation
-    const validDiscardSizes = [10, 11, 14];
-    if (!validDiscardSizes.includes(currentPlayer.hand.length)) {
-      console.log(`❌ Player cannot discard with ${currentPlayer.hand.length} tiles`);
-      return;
-    }
-
-    isProcessing.current = true;
-
-    setGameState(prevState => {
-      if (!prevState) {
-        isProcessing.current = false;
-        return prevState;
-      }
-      
-      const newState = { ...prevState };
-      const player = { ...newState.players[0] };
-      
-      // Remove selected tile from hand
-      player.hand = player.hand.filter(tile => tile.id !== selectedTile.id);
-      
-      console.log(`👤 Player discarded tile, hand size now: ${player.hand.length}`);
-
-      // Create discard entry
-      const discardedTile: DiscardedTile = {
-        tile: selectedTile,
-        playerId: player.id,
-        playerName: player.name,
-        turnNumber: newState.turnNumber
-      };
-      
-      // Add to discard pile and update player
-      newState.discardPile = [...newState.discardPile, discardedTile];
-      newState.players[0] = player;
-      
-      // Reset claim flag
-      newState.lastActionWasClaim = false;
-      
-      soundManager.playTileSound('discard', 'bottom');
-
-      // FIXED: Use new unified claim processing system
-      const { botClaim } = processDiscardClaims(newState, discardedTile);
-      
-      if (botClaim) {
-        if (botClaim.type === 'win') {
-          const success = handleBotWinClaim(newState, botClaim, discardedTile);
-          if (success) {
-            setSelectedTile(null);
-            isProcessing.current = false;
-            return newState;
-          }
+        // Remove tile from hand
+        newState.players = newState.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets] }));
+        newState.players[newState.currentPlayer].hand.splice(randomIndex, 1);
+        
+        // Add to discard pile
+        const discardedTile: DiscardedTile = {
+          tile: tileToDiscard,
+          playerId: player.id,
+          playerName: player.name,
+          turnNumber: state.turnNumber
+        };
+        newState.discardPile = [...newState.discardPile, discardedTile];
+        
+        // Process all potential claims
+        const claimResult = processDiscardClaims(newState, tileToDiscard, newState.currentPlayer);
+        
+        if (claimResult.hasHumanClaim) {
+          // Show claim options to human player
+          setClaimOptions({
+            chow: claimResult.humanClaimOptions.chow,
+            pung: claimResult.humanClaimOptions.pung,
+            kong: claimResult.humanClaimOptions.kong,
+            discardedTile: tileToDiscard,
+            discardingPlayer: newState.currentPlayer
+          });
+          setShowClaimOptions(true);
+          return newState;
+        } else if (claimResult.processedClaim) {
+          // Bot claim was processed
+          return claimResult.newState;
         } else {
-          const success = handleBotClaim(newState, botClaim, discardedTile);
-          if (success) {
-            setSelectedTile(null);
-            isProcessing.current = false;
-            return newState;
-          }
+          // No claims, move to next player
+          newState.currentPlayer = (newState.currentPlayer + 1) % 4;
+          newState.turnNumber += 1;
         }
-      }
-
-      // Move to next player
-      newState.currentPlayer = (newState.currentPlayer + 1) % 4;
-      newState.turnNumber++;
-
-      // Check for draw conditions
-      const drawCondition = checkDrawCondition(newState.wall.length, newState.turnNumber);
-      if (drawCondition) {
-        const finalScores = calculateDrawScores(newState.players);
-        setDrawDetails({
-          reason: drawCondition,
-          finalScores,
-          players: newState.players
-        });
-        newState.gamePhase = 'draw';
-        newState.drawReason = drawCondition;
-        newState.finalScores = finalScores;
         
-        setTimeout(() => {
-          setShowDrawModal(true);
-          isProcessing.current = false;
-        }, 1000);
-      } else {
-        isProcessing.current = false;
+        newState.lastActionWasClaim = false;
+        
+        // Play sound based on bot position
+        const positions = ['bottom', 'right', 'top', 'left'];
+        soundManager.playTileSound('discard', positions[newState.currentPlayer] as any);
       }
-
-      setSelectedTile(null);
-      soundManager.playTransitionSound('turn-change');
+      
       return newState;
+    } catch (error) {
+      console.error('Error in bot turn execution:', error);
+      return state;
+    }
+  }, [soundManager]);
+
+  // Auto-execute bot turns
+  useEffect(() => {
+    if (gameState.gamePhase !== 'playing') return;
+    if (gameState.players[gameState.currentPlayer].isBot && !showClaimOptions) {
+      const timer = setTimeout(() => {
+        setGameState(prevState => executeBotTurn(prevState));
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState.currentPlayer, gameState.gamePhase, showClaimOptions, executeBotTurn]);
+
+  // Check for draw conditions
+  useEffect(() => {
+    if (gameState.gamePhase !== 'playing') return;
+    
+    const drawReason = checkDrawCondition(gameState.wall.length, gameState.turnNumber);
+    if (drawReason) {
+      const finalScores = calculateDrawScores(gameState.players.map(p => ({
+        hand: p.hand,
+        exposedSets: p.exposedSets,
+        isDealer: p.isDealer
+      })));
+      
+      setGameState(prev => ({
+        ...prev,
+        gamePhase: 'draw',
+        drawReason,
+        finalScores
+      }));
+      
+      soundManager.playTransitionSound('round-end');
+    }
+  }, [gameState.wall.length, gameState.turnNumber, gameState.gamePhase, soundManager]);
+
+  // Handle human player's turn (draw tile if needed)
+  useEffect(() => {
+    if (gameState.gamePhase !== 'playing') return;
+    if (gameState.currentPlayer === 0 && !gameState.players[0].isBot && !showClaimOptions) {
+      const player = gameState.players[0];
+      const expectedHandSize = calculateExpectedHandSize(player, true);
+      
+      // Draw tile if player doesn't have enough tiles and last action wasn't a claim
+      if (!gameState.lastActionWasClaim && player.hand.length < expectedHandSize.min && gameState.wall.length > 0) {
+        setGameState(prevState => drawTile(prevState));
+        soundManager.playTileSound('draw', 'bottom');
+      }
+    }
+  }, [gameState.currentPlayer, gameState.gamePhase, showClaimOptions, gameState.lastActionWasClaim, soundManager]);
+
+  // Organize discards by player position for authentic layout
+  const organizeDiscardsByPosition = () => {
+    const discardsByPosition = {
+      bottom: [] as DiscardedTile[],
+      right: [] as DiscardedTile[],
+      top: [] as DiscardedTile[],
+      left: [] as DiscardedTile[]
+    };
+
+    gameState.discardPile.forEach(discard => {
+      switch (discard.playerId) {
+        case 'player1':
+          discardsByPosition.bottom.push(discard);
+          break;
+        case 'bot1':
+          discardsByPosition.right.push(discard);
+          break;
+        case 'bot2':
+          discardsByPosition.top.push(discard);
+          break;
+        case 'bot3':
+          discardsByPosition.left.push(discard);
+          break;
+      }
     });
+
+    return discardsByPosition;
   };
 
-  // Handle player draw
-  const handleDraw = () => {
-    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current || showClaimDialog) return;
+  const currentPlayer = gameState.players[gameState.currentPlayer];
+  const humanPlayer = gameState.players[0];
+
+  if (gameState.gamePhase === 'finished') {
+    const winner = gameState.players.find(p => p.id === gameState.winner);
+    const winningHand = winner ? analyzeWinningHand(winner.hand, winner.exposedSets) : null;
     
-    const currentPlayer = gameState.players[gameState.currentPlayer];
-    if (currentPlayer.isBot || gameState.wall.length === 0) return;
-    
-    // FIXED: Player can only draw if they have exactly 13 tiles and didn't just claim
-    if (currentPlayer.hand.length !== 13 || gameState.lastActionWasClaim) return;
-
-    isProcessing.current = true;
-
-    setGameState(prevState => {
-      if (!prevState) {
-        isProcessing.current = false;
-        return prevState;
-      }
-      
-      const newState = { ...prevState };
-      const player = { ...newState.players[0] };
-      
-      // Draw tile
-      const drawnTile = newState.wall[0];
-      player.hand = sortTiles([...player.hand, drawnTile]);
-      newState.wall = newState.wall.slice(1);
-      newState.players[0] = player;
-      
-      console.log(`👤 Player drew tile, hand size now: ${player.hand.length}`);
-      soundManager.playTileSound('draw', 'bottom');
-
-      // Check if player can win
-      if (isWinningHand(player.hand, player.exposedSets)) {
-        const analysis = analyzeWinningHand(player.hand, player.exposedSets);
-        const score = calculateWinScore(player.hand, player.exposedSets, 'self-drawn', player.isDealer);
-        
-        setWinDetails({
-          winner: player.name,
-          winType: 'self-drawn',
-          score,
-          analysis,
-          allPlayers: newState.players
-        });
-
-        newState.gamePhase = 'finished';
-        newState.winner = player.id;
-        newState.winType = 'self-drawn';
-        newState.winScore = score;
-
-        soundManager.playWinSound();
-        setTimeout(() => {
-          setShowWinModal(true);
-          isProcessing.current = false;
-        }, 500);
-      } else {
-        isProcessing.current = false;
-      }
-
-      return newState;
-    });
-  };
-
-  if (!gameState) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-white text-xl">Loading game...</div>
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 max-w-2xl w-full text-center">
+          <div className="text-6xl mb-6">🏆</div>
+          <h2 className="text-4xl font-bold text-white mb-4">Game Over!</h2>
+          <p className="text-2xl text-amber-400 mb-6">
+            {winner?.name} Wins!
+          </p>
+          
+          {winningHand && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Winning Hand</h3>
+              <div className="bg-emerald-800/30 rounded-xl p-4 mb-4">
+                <div className="flex flex-wrap gap-2 justify-center mb-4">
+                  {winningHand.allTiles.map((tile, index) => (
+                    <TileComponent
+                      key={`${tile.id}-${index}`}
+                      tile={tile}
+                      className="shadow-lg"
+                    />
+                  ))}
+                </div>
+                <div className="text-emerald-200 text-sm">
+                  <p><strong>Hand Type:</strong> {winningHand.handType}</p>
+                  <p><strong>Win Type:</strong> {gameState.winType === 'self-drawn' ? 'Self-drawn' : 'Claimed'}</p>
+                  <p><strong>Score:</strong> {gameState.winScore} points</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <button
+            onClick={() => setGameState(initializeGame())}
+            className="px-8 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-xl hover:from-amber-600 hover:to-orange-700 transition-all duration-300 hover:scale-105"
+          >
+            Play Again
+          </button>
+        </div>
       </div>
     );
   }
 
-  const currentPlayer = gameState.players[gameState.currentPlayer];
-  const humanPlayer = gameState.players[0];
-  const isPlayerTurn = gameState.currentPlayer === 0 && !currentPlayer.isBot;
-  
-  // FIXED: Proper draw/discard conditions
-  const canDraw = isPlayerTurn && gameState.wall.length > 0 && !gameState.lastActionWasClaim && humanPlayer.hand.length === 13 && !isProcessing.current && !showClaimDialog;
-  const canDiscard = isPlayerTurn && selectedTile !== null && [10, 11, 14].includes(humanPlayer.hand.length) && !isProcessing.current && !showClaimDialog;
-
-  return (
-    <div className="min-h-screen p-4 relative">
-      {/* Settings Button */}
-      <button
-        onClick={() => setShowSettings(true)}
-        className="fixed top-4 right-4 z-40 p-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg text-white hover:bg-white/20 transition-all duration-300"
-      >
-        <Settings className="w-5 h-5" />
-      </button>
-
-      {/* Game Stats */}
-      <div className="fixed top-4 left-4 z-40 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg p-4 text-white">
-        <div className="flex items-center space-x-4 text-sm">
-          <div className="flex items-center space-x-1">
-            <Users className="w-4 h-4" />
-            <span>Round {gameState.round}</span>
+  if (gameState.gamePhase === 'draw') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 max-w-2xl w-full text-center">
+          <div className="text-6xl mb-6">🤝</div>
+          <h2 className="text-4xl font-bold text-white mb-4">Draw Game!</h2>
+          <p className="text-xl text-emerald-200 mb-6">
+            {gameState.drawReason === 'wall-exhausted' 
+              ? 'The wall has been exhausted with no winner.' 
+              : 'Too many turns have passed without a winner.'}
+          </p>
+          
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Final Scores</h3>
+            <div className="space-y-2">
+              {gameState.players.map((player, index) => (
+                <div key={player.id} className="flex justify-between items-center bg-white/5 rounded-lg p-3">
+                  <span className="text-white font-medium">{player.name}</span>
+                  <span className="text-emerald-300">{gameState.finalScores?.[index] || 0} points</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="flex items-center space-x-1">
-            <Clock className="w-4 h-4" />
-            <span>Turn {gameState.turnNumber}</span>
-          </div>
-          <div className="flex items-center space-x-1">
-            <Shuffle className="w-4 h-4" />
-            <span>{gameState.wall.length} tiles</span>
-          </div>
+          
+          <button
+            onClick={() => setGameState(initializeGame())}
+            className="px-8 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-xl hover:from-amber-600 hover:to-orange-700 transition-all duration-300 hover:scale-105"
+          >
+            Play Again
+          </button>
         </div>
       </div>
+    );
+  }
 
-      {/* Processing Indicator */}
-      {isProcessing.current && (
-        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-black/50 backdrop-blur-sm rounded-lg p-4">
-          <div className="text-white text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
-            <p>Processing...</p>
+  const discardsByPosition = organizeDiscardsByPosition();
+
+  return (
+    <div className="min-h-screen p-4">
+      <div className="max-w-7xl mx-auto">
+        {/* Game Info Header */}
+        <div className="mb-6 text-center">
+          <div className="inline-flex items-center space-x-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-6 py-3">
+            <div className="text-white">
+              <span className="text-sm text-emerald-200">Round</span>
+              <div className="font-bold">{gameState.round}</div>
+            </div>
+            <div className="text-white">
+              <span className="text-sm text-emerald-200">Turn</span>
+              <div className="font-bold">{gameState.turnNumber}</div>
+            </div>
+            <div className="text-white">
+              <span className="text-sm text-emerald-200">Wall</span>
+              <div className="font-bold">{gameState.wall.length}</div>
+            </div>
+            <div className="text-white">
+              <span className="text-sm text-emerald-200">Current</span>
+              <div className="font-bold">{currentPlayer.name}</div>
+            </div>
           </div>
         </div>
-      )}
 
-      {/* Claim Dialog */}
-      {showClaimDialog && claimOptions.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 max-w-md w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-bold text-lg">Claim Available!</h3>
-              <button
-                onClick={handleDeclineClaim}
-                className="p-1 text-gray-400 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <p className="text-emerald-200 mb-4">
-              You can claim the discarded tile to form:
-            </p>
-            
-            <div className="space-y-3 mb-6">
-              {claimOptions.map((option, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleHumanClaim(option)}
-                  className="w-full p-4 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-all duration-300 hover:scale-105"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="text-left">
-                      <div className="text-white font-medium capitalize mb-1">
-                        {option.type === 'win' ? 'Mahjong!' : option.type}
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        {option.tiles.map((tile, tileIndex) => (
+        {/* Main Game Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Game Board - Takes up 3 columns */}
+          <div className="lg:col-span-3">
+            {/* Top Player (Bot 2) */}
+            <div className="mb-6">
+              <div className="text-center mb-3">
+                <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
+                  gameState.currentPlayer === 2 
+                    ? 'bg-amber-500 text-white shadow-lg' 
+                    : 'bg-white/20 text-white'
+                }`}>
+                  <span className="mr-2">{gameState.players[2].name}</span>
+                  {gameState.currentPlayer === 2 && <span className="animate-pulse">●</span>}
+                </div>
+                <div className="text-xs text-emerald-200 mt-1">
+                  Hand: {gameState.players[2].hand.length} | Sets: {gameState.players[2].exposedSets.length}
+                </div>
+              </div>
+
+              {/* Exposed Sets */}
+              {gameState.players[2].exposedSets.length > 0 && (
+                <div className="mb-3 flex justify-center">
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {gameState.players[2].exposedSets.map((set, setIndex) => (
+                      <div key={setIndex} className="flex gap-1 bg-white/10 rounded-lg p-2">
+                        {set.map((tile, tileIndex) => (
                           <TileComponent
-                            key={tileIndex}
+                            key={`${tile.id}-${tileIndex}`}
                             tile={tile}
                             height="compact"
                             className="opacity-90"
                           />
                         ))}
-                        <span className="text-emerald-200 mx-2">+</span>
-                        <TileComponent
-                          tile={option.discardedTile}
-                          height="compact"
-                          className="opacity-90 border-2 border-amber-400"
-                        />
                       </div>
-                    </div>
-                    <div className="text-emerald-200 text-sm">
-                      {option.type === 'win' ? '🏆' : '→'}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            
-            <div className="flex space-x-3">
-              <button
-                onClick={handleDeclineClaim}
-                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
-              >
-                Pass
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Game Area */}
-      <div className="max-w-7xl mx-auto">
-        {/* Top Bot */}
-        <div className="text-center mb-4">
-          <div className="inline-block bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4">
-            <div className="flex items-center justify-center space-x-3 mb-3">
-              <div className={`w-3 h-3 rounded-full ${gameState.currentPlayer === 2 ? 'bg-amber-400 animate-pulse' : 'bg-gray-400'}`}></div>
-              <h3 className="text-white font-medium">{gameState.players[2].name}</h3>
-              <div className="text-emerald-200 text-sm">
-                {gameState.players[2].hand.length} tiles
-              </div>
-            </div>
-            {gameState.players[2].exposedSets.length > 0 && (
-              <div className="flex justify-center space-x-1 mb-2">
-                {gameState.players[2].exposedSets.map((set, setIndex) => (
-                  <div key={setIndex} className="flex space-x-0.5 bg-white/10 rounded p-1">
-                    {set.map((tile, tileIndex) => (
-                      <TileComponent
-                        key={`${setIndex}-${tileIndex}`}
-                        tile={tile}
-                        height="compact"
-                        className="opacity-90"
-                      />
                     ))}
-                    {/* Kong indicator */}
-                    {set.length === 4 && (
-                      <div className="text-xs text-amber-400 font-bold self-center ml-1">K</div>
-                    )}
                   </div>
-                ))}
-              </div>
-            )}
-            <div className="flex justify-center space-x-1">
-              {gameState.players[2].hand.map((_, index) => (
-                <div
-                  key={index}
-                  className="w-6 h-8 bg-emerald-700 border border-emerald-600 rounded-sm"
-                ></div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Middle Row */}
-        <div className="flex justify-between items-center mb-4">
-          {/* Left Bot */}
-          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4">
-            <div className="flex flex-col items-center space-y-3">
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${gameState.currentPlayer === 3 ? 'bg-amber-400 animate-pulse' : 'bg-gray-400'}`}></div>
-                <h3 className="text-white font-medium">{gameState.players[3].name}</h3>
-              </div>
-              <div className="text-emerald-200 text-sm">
-                {gameState.players[3].hand.length} tiles
-              </div>
-              {gameState.players[3].exposedSets.length > 0 && (
-                <div className="space-y-1">
-                  {gameState.players[3].exposedSets.map((set, setIndex) => (
-                    <div key={setIndex} className="flex space-x-0.5 bg-white/10 rounded p-1">
-                      {set.map((tile, tileIndex) => (
-                        <TileComponent
-                          key={`${setIndex}-${tileIndex}`}
-                          tile={tile}
-                          height="compact"
-                          className="opacity-90"
-                        />
-                      ))}
-                      {/* Kong indicator */}
-                      {set.length === 4 && (
-                        <div className="text-xs text-amber-400 font-bold self-center ml-1">K</div>
-                      )}
-                    </div>
-                  ))}
                 </div>
               )}
-              <div className="flex flex-col space-y-1">
-                {gameState.players[3].hand.map((_, index) => (
+
+              {/* Bot Hand (Hidden) */}
+              <div className="flex gap-1 justify-center">
+                {Array.from({ length: gameState.players[2].hand.length }).map((_, index) => (
                   <div
                     key={index}
-                    className="w-6 h-8 bg-emerald-700 border border-emerald-600 rounded-sm"
-                  ></div>
+                    className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
+                  />
                 ))}
               </div>
             </div>
-          </div>
 
-          {/* Center - Discard History */}
-          <div className="flex-1 mx-6">
-            <DiscardHistory 
-              discardPile={gameState.discardPile} 
-              players={gameState.players.map(p => ({ id: p.id, name: p.name }))}
-            />
-          </div>
-
-          {/* Right Bot */}
-          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4">
-            <div className="flex flex-col items-center space-y-3">
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${gameState.currentPlayer === 1 ? 'bg-amber-400 animate-pulse' : 'bg-gray-400'}`}></div>
-                <h3 className="text-white font-medium">{gameState.players[1].name}</h3>
-              </div>
-              <div className="text-emerald-200 text-sm">
-                {gameState.players[1].hand.length} tiles
-              </div>
-              {gameState.players[1].exposedSets.length > 0 && (
-                <div className="space-y-1">
-                  {gameState.players[1].exposedSets.map((set, setIndex) => (
-                    <div key={setIndex} className="flex space-x-0.5 bg-white/10 rounded p-1">
-                      {set.map((tile, tileIndex) => (
-                        <TileComponent
-                          key={`${setIndex}-${tileIndex}`}
-                          tile={tile}
-                          height="compact"
-                          className="opacity-90"
-                        />
-                      ))}
-                      {/* Kong indicator */}
-                      {set.length === 4 && (
-                        <div className="text-xs text-amber-400 font-bold self-center ml-1">K</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="flex flex-col space-y-1">
-                {gameState.players[1].hand.map((_, index) => (
-                  <div
-                    key={index}
-                    className="w-6 h-8 bg-emerald-700 border border-emerald-600 rounded-sm"
-                  ></div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Player Hand */}
-        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className={`w-4 h-4 rounded-full ${isPlayerTurn ? 'bg-amber-400 animate-pulse' : 'bg-gray-400'}`}></div>
-              <h3 className="text-white font-medium text-lg">{humanPlayer.name}</h3>
-              <div className="text-emerald-200">
-                {humanPlayer.hand.length} tiles
-              </div>
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={handleDraw}
-                disabled={!canDraw}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                  canDraw
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white hover:scale-105'
-                    : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                Draw Tile
-              </button>
-              <button
-                onClick={handleDiscard}
-                disabled={!canDiscard}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                  canDiscard
-                    ? 'bg-red-600 hover:bg-red-700 text-white hover:scale-105'
-                    : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                Discard
-              </button>
-            </div>
-          </div>
-
-          {/* Exposed Sets */}
-          {humanPlayer.exposedSets.length > 0 && (
-            <div className="mb-4">
-              <h4 className="text-emerald-200 text-sm mb-2">Exposed Sets:</h4>
-              <div className="flex space-x-4">
-                {humanPlayer.exposedSets.map((set, setIndex) => (
-                  <div key={setIndex} className="flex items-center space-x-1 bg-white/5 rounded-lg p-2">
-                    {set.map((tile, tileIndex) => (
-                      <TileComponent
-                        key={`${setIndex}-${tileIndex}`}
-                        tile={tile}
-                        className="opacity-90"
-                      />
-                    ))}
-                    {/* Kong indicator */}
-                    {set.length === 4 && (
-                      <div className="text-amber-400 font-bold text-sm ml-2">KONG</div>
-                    )}
+            {/* Middle Row - Left Player, Center Discard Area, Right Player */}
+            <div className="grid grid-cols-3 gap-6 mb-6">
+              {/* Left Player (Bot 3) */}
+              <div className="flex flex-col items-center">
+                <div className="text-center mb-3">
+                  <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
+                    gameState.currentPlayer === 3 
+                      ? 'bg-amber-500 text-white shadow-lg' 
+                      : 'bg-white/20 text-white'
+                  }`}>
+                    <span className="mr-2">{gameState.players[3].name}</span>
+                    {gameState.currentPlayer === 3 && <span className="animate-pulse">●</span>}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                  <div className="text-xs text-emerald-200 mt-1">
+                    Hand: {gameState.players[3].hand.length} | Sets: {gameState.players[3].exposedSets.length}
+                  </div>
+                </div>
 
-          {/* Hand Tiles */}
-          <div className="flex flex-wrap gap-2 justify-center">
-            {humanPlayer.hand.map((tile, index) => (
-              <TileComponent
-                key={tile.id}
-                tile={tile}
-                isSelected={selectedTile?.id === tile.id}
-                onClick={() => handleTileClick(tile)}
-                className="hover:scale-105 transition-transform duration-200"
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Bot Action Indicator */}
-      {botAction && (
-        <BotActionIndicator
-          action={botAction.type}
-          playerName={botAction.playerName}
-          tiles={botAction.tiles}
-          onComplete={() => setBotAction(null)}
-        />
-      )}
-
-      {/* Win Modal */}
-      {showWinModal && winDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="text-center mb-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trophy className="w-10 h-10 text-white" />
-              </div>
-              <h2 className="text-3xl font-bold text-white mb-2">Mahjong!</h2>
-              <p className="text-emerald-200 text-lg">
-                {winDetails.winner} wins with {winDetails.winType === 'self-drawn' ? 'self-drawn' : 'claimed discard'}!
-              </p>
-              <div className="mt-4 bg-white/10 rounded-lg p-4 inline-block">
-                <p className="text-white font-medium">Score: {winDetails.score} points</p>
-                <p className="text-emerald-200 text-sm">{winDetails.analysis.handType}</p>
-              </div>
-            </div>
-
-            {/* Winning Hand Display */}
-            <div className="mb-6">
-              <h3 className="text-white font-medium mb-4 text-center">Winning Hand</h3>
-              <div className="bg-emerald-800/20 rounded-xl p-4">
-                {/* Sets */}
-                {winDetails.analysis.sets.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-emerald-200 text-sm mb-2">Sets:</p>
-                    <div className="flex flex-wrap gap-3 justify-center">
-                      {winDetails.analysis.sets.map((set: Tile[], setIndex: number) => (
-                        <div key={setIndex} className="flex items-center space-x-1 bg-white/10 rounded-lg p-2">
-                          {set.map((tile: Tile, tileIndex: number) => (
+                {/* Exposed Sets */}
+                {gameState.players[3].exposedSets.length > 0 && (
+                  <div className="mb-3">
+                    <div className="flex flex-col gap-1">
+                      {gameState.players[3].exposedSets.map((set, setIndex) => (
+                        <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
+                          {set.map((tile, tileIndex) => (
                             <TileComponent
-                              key={`${setIndex}-${tileIndex}`}
+                              key={`${tile.id}-${tileIndex}`}
                               tile={tile}
                               height="compact"
                               className="opacity-90"
                             />
                           ))}
-                          {/* Kong indicator in win display */}
-                          {set.length === 4 && (
-                            <div className="text-amber-400 font-bold text-xs ml-1">K</div>
-                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Pair */}
-                {winDetails.analysis.pair.length > 0 && (
-                  <div>
-                    <p className="text-emerald-200 text-sm mb-2">Pair:</p>
-                    <div className="flex justify-center">
-                      <div className="flex space-x-1 bg-white/10 rounded-lg p-2">
-                        {winDetails.analysis.pair.map((tile: Tile, tileIndex: number) => (
+                {/* Bot Hand (Hidden) */}
+                <div className="flex flex-col gap-1">
+                  {Array.from({ length: gameState.players[3].hand.length }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Center Area - Complete Discard History (Real Mahjong Style) */}
+              <div className="flex flex-col items-center justify-center">
+                <div className="bg-emerald-900/40 backdrop-blur-sm rounded-xl p-4 border border-emerald-600/30 w-full min-h-[300px] relative">
+                  <div className="text-white font-medium mb-3 text-center text-sm">Discard Pool</div>
+                  
+                  {gameState.discardPile.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-emerald-200">
+                      <div className="text-center">
+                        <div className="text-4xl mb-2">🀄</div>
+                        <p className="text-sm">No discards yet</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative h-full">
+                      {/* Authentic Mahjong Discard Layout */}
+                      <div className="grid grid-cols-6 gap-1 justify-center items-center h-full p-2">
+                        {gameState.discardPile.map((discard, index) => {
+                          // Determine position based on player and order
+                          const isRecent = index >= gameState.discardPile.length - 6;
+                          const playerColors = {
+                            'player1': 'border-blue-400/50',
+                            'bot1': 'border-green-400/50', 
+                            'bot2': 'border-red-400/50',
+                            'bot3': 'border-purple-400/50'
+                          };
+                          
+                          return (
+                            <div 
+                              key={`${discard.tile.id}-${index}`}
+                              className={`relative ${isRecent ? 'animate-pulse' : ''}`}
+                            >
+                              <TileComponent
+                                tile={discard.tile}
+                                height="compact"
+                                className={`
+                                  ${isRecent ? 'shadow-lg scale-105' : 'opacity-80 scale-95'}
+                                  ${playerColors[discard.playerId as keyof typeof playerColors] || 'border-gray-400/50'}
+                                  border-2 transition-all duration-300 hover:scale-110 hover:opacity-100
+                                `}
+                              />
+                              {/* Turn number indicator */}
+                              <div className="absolute -top-1 -right-1 bg-black/70 text-white text-[8px] rounded-full w-3 h-3 flex items-center justify-center font-bold">
+                                {discard.turnNumber}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Most recent discard highlight */}
+                      {gameState.discardPile.length > 0 && (
+                        <div className="absolute bottom-2 left-2 right-2 bg-black/50 rounded-lg p-2 text-center">
+                          <div className="text-amber-400 text-xs font-medium">
+                            Last: {gameState.discardPile[gameState.discardPile.length - 1].playerName}
+                          </div>
+                          <div className="text-emerald-200 text-[10px]">
+                            Turn {gameState.discardPile[gameState.discardPile.length - 1].turnNumber}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Player (Bot 1) */}
+              <div className="flex flex-col items-center">
+                <div className="text-center mb-3">
+                  <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
+                    gameState.currentPlayer === 1 
+                      ? 'bg-amber-500 text-white shadow-lg' 
+                      : 'bg-white/20 text-white'
+                  }`}>
+                    <span className="mr-2">{gameState.players[1].name}</span>
+                    {gameState.currentPlayer === 1 && <span className="animate-pulse">●</span>}
+                  </div>
+                  <div className="text-xs text-emerald-200 mt-1">
+                    Hand: {gameState.players[1].hand.length} | Sets: {gameState.players[1].exposedSets.length}
+                  </div>
+                </div>
+
+                {/* Exposed Sets */}
+                {gameState.players[1].exposedSets.length > 0 && (
+                  <div className="mb-3">
+                    <div className="flex flex-col gap-1">
+                      {gameState.players[1].exposedSets.map((set, setIndex) => (
+                        <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
+                          {set.map((tile, tileIndex) => (
+                            <TileComponent
+                              key={`${tile.id}-${tileIndex}`}
+                              tile={tile}
+                              height="compact"
+                              className="opacity-90"
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Bot Hand (Hidden) */}
+                <div className="flex flex-col gap-1">
+                  {Array.from({ length: gameState.players[1].hand.length }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Player (Human) */}
+            <div>
+              <div className="text-center mb-3">
+                <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
+                  gameState.currentPlayer === 0 
+                    ? 'bg-amber-500 text-white shadow-lg' 
+                    : 'bg-white/20 text-white'
+                }`}>
+                  <span className="mr-2">{humanPlayer.name}</span>
+                  {gameState.currentPlayer === 0 && <span className="animate-pulse">●</span>}
+                </div>
+                <div className="text-xs text-emerald-200 mt-1">
+                  Hand: {humanPlayer.hand.length} | Sets: {humanPlayer.exposedSets.length}
+                </div>
+              </div>
+
+              {/* Exposed Sets */}
+              {humanPlayer.exposedSets.length > 0 && (
+                <div className="mb-4 flex justify-center">
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {humanPlayer.exposedSets.map((set, setIndex) => (
+                      <div key={setIndex} className="flex gap-1 bg-white/10 rounded-lg p-2">
+                        {set.map((tile, tileIndex) => (
                           <TileComponent
-                            key={tileIndex}
+                            key={`${tile.id}-${tileIndex}`}
                             tile={tile}
                             height="compact"
                             className="opacity-90"
                           />
                         ))}
                       </div>
-                    </div>
+                    ))}
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              )}
 
-            {/* Final Scores */}
-            <div className="mb-6">
-              <h3 className="text-white font-medium mb-3">Final Scores</h3>
-              <div className="space-y-2">
-                {winDetails.allPlayers.map((player: Player, index: number) => (
-                  <div
-                    key={player.id}
-                    className={`flex justify-between items-center p-3 rounded-lg ${
-                      player.id === gameState.winner
-                        ? 'bg-amber-500/20 border border-amber-400'
-                        : 'bg-white/5'
-                    }`}
-                  >
-                    <span className="text-white font-medium">{player.name}</span>
-                    <span className={`font-bold ${
-                      player.id === gameState.winner ? 'text-amber-400' : 'text-emerald-200'
-                    }`}>
-                      {player.id === gameState.winner ? winDetails.score : 0} pts
-                    </span>
-                  </div>
+              {/* Human Player Hand */}
+              <div className="flex flex-wrap gap-2 justify-center mb-4">
+                {humanPlayer.hand.map((tile) => (
+                  <TileComponent
+                    key={tile.id}
+                    tile={tile}
+                    isSelected={selectedTile?.id === tile.id}
+                    onClick={() => handleTileSelect(tile)}
+                    className="hover:scale-105 transition-transform cursor-pointer"
+                  />
                 ))}
               </div>
-            </div>
 
-            <div className="flex space-x-4">
-              <button
-                onClick={initializeGame}
-                className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold py-3 px-6 rounded-xl hover:from-amber-600 hover:to-orange-700 transition-all duration-300 hover:scale-105"
-              >
-                New Game
-              </button>
-              <button
-                onClick={() => setShowWinModal(false)}
-                className="flex-1 bg-white/10 text-white font-medium py-3 px-6 rounded-xl hover:bg-white/20 transition-all duration-300"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Draw Modal */}
-      {showDrawModal && drawDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 max-w-lg w-full mx-4">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shuffle className="w-8 h-8 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Draw Game</h2>
-              <p className="text-emerald-200">
-                {drawDetails.reason === 'wall-exhausted' 
-                  ? 'No more tiles in the wall' 
-                  : 'Game took too long'}
-              </p>
-            </div>
-
-            <div className="mb-6">
-              <h3 className="text-white font-medium mb-3">Final Scores</h3>
-              <div className="space-y-2">
-                {drawDetails.players.map((player: Player, index: number) => (
-                  <div key={player.id} className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                    <span className="text-white font-medium">{player.name}</span>
-                    <span className="text-emerald-200 font-bold">
-                      {drawDetails.finalScores[index]} pts
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex space-x-4">
-              <button
-                onClick={initializeGame}
-                className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 hover:scale-105"
-              >
-                New Game
-              </button>
-              <button
-                onClick={() => setShowDrawModal(false)}
-                className="flex-1 bg-white/10 text-white font-medium py-3 px-6 rounded-xl hover:bg-white/20 transition-all duration-300"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Settings Modal */}
-      {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 max-w-md w-full mx-4">
-            <h2 className="text-2xl font-bold text-white mb-6">Settings</h2>
-            
-            <div className="space-y-6">
-              {/* Sound Settings */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-white font-medium">Sound Effects</span>
+              {/* Discard Button */}
+              {gameState.currentPlayer === 0 && selectedTile && (
+                <div className="text-center">
                   <button
-                    onClick={() => setSoundEnabled(!soundEnabled)}
-                    className={`p-2 rounded-lg transition-colors ${
-                      soundEnabled ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'
-                    }`}
+                    onClick={() => handleDiscard(selectedTile)}
+                    className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium shadow-lg"
                   >
-                    {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+                    Discard Selected Tile
                   </button>
                 </div>
-                
-                {soundEnabled && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-emerald-200 text-sm mb-2">
-                        Master Volume: {Math.round(masterVolume * 100)}%
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={masterVolume}
-                        onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-emerald-200 text-sm mb-2">
-                        SFX Volume: {Math.round(sfxVolume * 100)}%
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={sfxVolume}
-                        onChange={(e) => setSfxVolume(parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
+              )}
+            </div>
+          </div>
+
+          {/* Side Panel - Discard History (Detailed View) */}
+          <div className="lg:col-span-1">
+            <DiscardHistory 
+              discardPile={gameState.discardPile} 
+              players={gameState.players.map(p => ({ id: p.id, name: p.name }))}
+            />
+          </div>
+        </div>
+
+        {/* Claim Options Modal */}
+        {showClaimOptions && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold text-white mb-4 text-center">Claim Options</h3>
+              
+              <div className="space-y-3">
+                {claimOptions.chow.length > 0 && (
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Chow (Sequence)</h4>
+                    {claimOptions.chow.map((chowTiles, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleClaim('chow', chowTiles)}
+                        className="w-full p-3 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/50 rounded-lg transition-colors mb-2"
+                      >
+                        <div className="flex justify-center gap-1">
+                          {[claimOptions.discardedTile, ...chowTiles].map((tile, tileIndex) => (
+                            <TileComponent
+                              key={tileIndex}
+                              tile={tile!}
+                              height="compact"
+                            />
+                          ))}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 )}
+                
+                {claimOptions.pung && (
+                  <button
+                    onClick={() => handleClaim('pung')}
+                    className="w-full p-3 bg-green-500/20 hover:bg-green-500/30 border border-green-400/50 rounded-lg transition-colors"
+                  >
+                    <div className="text-white font-medium mb-2">Pung (Triplet)</div>
+                    <div className="flex justify-center gap-1">
+                      {[claimOptions.discardedTile, ...claimOptions.pung].map((tile, index) => (
+                        <TileComponent
+                          key={index}
+                          tile={tile!}
+                          height="compact"
+                        />
+                      ))}
+                    </div>
+                  </button>
+                )}
+                
+                {claimOptions.kong && (
+                  <button
+                    onClick={() => handleClaim('kong')}
+                    className="w-full p-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/50 rounded-lg transition-colors"
+                  >
+                    <div className="text-white font-medium mb-2">Kong (Quad)</div>
+                    <div className="flex justify-center gap-1">
+                      {[claimOptions.discardedTile, ...claimOptions.kong].map((tile, index) => (
+                        <TileComponent
+                          key={index}
+                          tile={tile!}
+                          height="compact"
+                        />
+                      ))}
+                    </div>
+                  </button>
+                )}
               </div>
-
-              {/* Game Stats */}
-              <div>
-                <h3 className="text-white font-medium mb-3">Game Statistics</h3>
-                <div className="bg-white/5 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-emerald-200">Games Played:</span>
-                    <span className="text-white">{gameStats.gamesPlayed}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-emerald-200">Games Won:</span>
-                    <span className="text-white">{gameStats.gamesWon}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-emerald-200">Win Rate:</span>
-                    <span className="text-white">
-                      {gameStats.gamesPlayed > 0 ? Math.round((gameStats.gamesWon / gameStats.gamesPlayed) * 100) : 0}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-emerald-200">Best Score:</span>
-                    <span className="text-white">{gameStats.bestScore}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex space-x-4 mt-8">
+              
               <button
-                onClick={() => setShowSettings(false)}
-                className="flex-1 bg-white/10 text-white font-medium py-3 px-6 rounded-xl hover:bg-white/20 transition-all duration-300"
+                onClick={handleSkipClaim}
+                className="w-full mt-4 px-4 py-2 bg-gray-500/20 hover:bg-gray-500/30 border border-gray-400/50 text-white rounded-lg transition-colors"
               >
-                Close
+                Skip
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Bot Action Indicator */}
+        {botAction && (
+          <BotActionIndicator
+            action={botAction.action}
+            playerName={botAction.playerName}
+            tiles={botAction.tiles}
+            onComplete={() => setBotAction(null)}
+          />
+        )}
+      </div>
     </div>
   );
 };
