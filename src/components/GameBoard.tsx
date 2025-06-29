@@ -303,6 +303,21 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
     };
   };
 
+  // Draw tile for current player
+  const drawTile = (state: GameState): GameState => {
+    if (state.wall.length === 0) return state;
+    
+    const newState = { ...state };
+    newState.players = state.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets] }));
+    newState.wall = [...state.wall];
+    
+    const drawnTile = newState.wall.pop()!;
+    newState.players[state.currentPlayer].hand.push(drawnTile);
+    newState.players[state.currentPlayer].hand = sortTiles(newState.players[state.currentPlayer].hand);
+    
+    return newState;
+  };
+
   // Process bot claim
   const processBotClaim = (state: GameState, claim: any, discardedTile: Tile) => {
     const claimingPlayer = state.players[claim.playerIndex];
@@ -366,6 +381,13 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
         }
       });
       player.exposedSets.push(claim.tiles);
+      
+      // KONG RULE: Draw a replacement tile from the wall
+      if (newState.wall.length > 0) {
+        const replacementTile = newState.wall.pop()!;
+        player.hand.push(replacementTile);
+        player.hand = sortTiles(player.hand);
+      }
     }
     
     // Remove the discarded tile from discard pile since it was claimed
@@ -457,6 +479,14 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
         // Create exposed set
         const exposedSet = [claimOptions.discardedTile, ...kongTiles];
         player.exposedSets.push(exposedSet);
+        
+        // KONG RULE: Draw a replacement tile from the wall
+        if (newState.wall.length > 0) {
+          const replacementTile = newState.wall.pop()!;
+          player.hand.push(replacementTile);
+          player.hand = sortTiles(player.hand);
+          soundManager.playTileSound('draw', 'bottom');
+        }
       }
     }
     
@@ -486,21 +516,6 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
     setGameState(newState);
     setShowClaimOptions(false);
     setClaimOptions({ chow: [], pung: null, kong: null, discardedTile: null, discardingPlayer: -1 });
-  };
-
-  // Draw tile for current player
-  const drawTile = (state: GameState): GameState => {
-    if (state.wall.length === 0) return state;
-    
-    const newState = { ...state };
-    newState.players = state.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets] }));
-    newState.wall = [...state.wall];
-    
-    const drawnTile = newState.wall.pop()!;
-    newState.players[state.currentPlayer].hand.push(drawnTile);
-    newState.players[state.currentPlayer].hand = sortTiles(newState.players[state.currentPlayer].hand);
-    
-    return newState;
   };
 
   // Execute bot turn
@@ -1044,8 +1059,8 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
                     onClick={() => handleClaim('kong')}
                     className="w-full p-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/50 rounded-lg transition-colors"
                   >
-                    <div className="text-white font-medium mb-2">Kong (Quad)</div>
-                    <div className="flex justify-center gap-1">
+                    <div className="text-white font-medium mb-2">Kong (Quad) + Draw Tile</div>
+                    <div className="flex justify-center gap-1 mb-2">
                       {[claimOptions.discardedTile, ...claimOptions.kong].map((tile, index) => (
                         <TileComponent
                           key={index}
@@ -1053,6 +1068,9 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
                           height="compact"
                         />
                       ))}
+                    </div>
+                    <div className="text-purple-200 text-xs">
+                      ⚡ Kong automatically draws a replacement tile
                     </div>
                   </button>
                 )}
