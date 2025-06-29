@@ -316,43 +316,22 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       const botPlayer = { ...newState.players[newState.currentPlayer] };
       const botPlayerIndex = newState.currentPlayer;
 
-      // Check win condition first
-      if (isWinningHand(botPlayer.hand, botPlayer.exposedSets)) {
-        const analysis = analyzeWinningHand(botPlayer.hand, botPlayer.exposedSets);
-        const score = calculateWinScore(botPlayer.hand, botPlayer.exposedSets, 'self-drawn', botPlayer.isDealer);
-        
-        setBotAction({
-          type: 'win',
-          playerName: botPlayer.name,
-          tiles: analysis.allTiles
-        });
+      console.log(`🤖 Bot ${botPlayer.name} hand size: ${botPlayer.hand.length}, lastActionWasClaim: ${newState.lastActionWasClaim}`);
 
-        setWinDetails({
-          winner: botPlayer.name,
-          winType: 'self-drawn',
-          score,
-          analysis,
-          allPlayers: newState.players
-        });
+      // FIXED: Proper turn flow logic
+      // 1. If bot just claimed, they must discard (hand size varies based on claim type)
+      // 2. If bot didn't claim and has 13 tiles, they must draw first
+      // 3. If bot has 14 tiles, they must discard
 
-        newState.gamePhase = 'finished';
-        newState.winner = botPlayer.id;
-        newState.winType = 'self-drawn';
-        newState.winScore = score;
-
-        soundManager.playWinSound();
-        
-        setTimeout(() => {
-          setShowWinModal(true);
-          setBotAction(null);
-          isProcessing.current = false;
-        }, 2000);
-
-        return newState;
-      }
-
-      // Draw tile if needed (13 tiles and not from claim)
-      if (!newState.lastActionWasClaim && botPlayer.hand.length === 13) {
+      if (newState.lastActionWasClaim) {
+        // Bot just claimed, must discard without drawing
+        // Hand size after claim: 13 - tiles_used_in_claim
+        // Kong: 13 - 3 = 10 tiles
+        // Pung: 13 - 2 = 11 tiles  
+        // Chow: 13 - 2 = 11 tiles
+        console.log(`🤖 Bot ${botPlayer.name} must discard after claim`);
+      } else if (botPlayer.hand.length === 13) {
+        // Normal turn: draw first, then discard
         if (newState.wall.length === 0) {
           const drawCondition = checkDrawCondition(newState.wall.length, newState.turnNumber);
           if (drawCondition) {
@@ -380,6 +359,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         botPlayer.hand = sortTiles([...botPlayer.hand, drawnTile]);
         newState.wall = newState.wall.slice(1);
         
+        console.log(`🤖 Bot ${botPlayer.name} drew tile, hand size now: ${botPlayer.hand.length}`);
         soundManager.playTileSound('draw', getPlayerPosition(botPlayer.id));
 
         // Check win after drawing
@@ -416,21 +396,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
           return newState;
         }
-      }
-
-      // Reset claim flag
-      newState.lastActionWasClaim = false;
-
-      // Validate hand size for discarding - allow for different hand sizes after claims
-      // Normal: 14 tiles (13 + 1 drawn)
-      // After pung/chow: 11 tiles (13 - 2 claimed + 1 discarded = 11 + 1 to discard)
-      // After kong: 10 tiles (13 - 3 claimed + 1 discarded = 10 + 1 to discard)
-      const validHandSizes = [10, 11, 14]; // Valid hand sizes before discarding
-      if (!validHandSizes.includes(botPlayer.hand.length)) {
+      } else if (botPlayer.hand.length !== 14 && botPlayer.hand.length !== 10 && botPlayer.hand.length !== 11) {
+        // Invalid hand size
         console.error(`❌ Bot ${botPlayer.name} has invalid hand size: ${botPlayer.hand.length}`);
         isProcessing.current = false;
         return prevState;
       }
+
+      // Now bot must discard (hand size should be 14, 11, or 10)
+      console.log(`🤖 Bot ${botPlayer.name} choosing tile to discard from ${botPlayer.hand.length} tiles`);
 
       // Bot AI: Choose tile to discard
       const winningTiles = isOneAwayFromWin(botPlayer.hand, botPlayer.exposedSets);
@@ -455,6 +429,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       // Remove tile from bot's hand
       botPlayer.hand = botPlayer.hand.filter(tile => tile.id !== tileToDiscard.id);
       
+      console.log(`🤖 Bot ${botPlayer.name} discarded tile, hand size now: ${botPlayer.hand.length}`);
+
       // Create discard entry
       const discardedTile: DiscardedTile = {
         tile: tileToDiscard,
@@ -466,6 +442,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       // Add to discard pile and update player
       newState.discardPile = [...newState.discardPile, discardedTile];
       newState.players[botPlayerIndex] = botPlayer;
+      
+      // Reset claim flag after processing
+      newState.lastActionWasClaim = false;
       
       soundManager.playTileSound('discard', getPlayerPosition(botPlayer.id));
 
@@ -548,7 +527,18 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     if (!gameState || !selectedTile || gameState.gamePhase !== 'playing' || isProcessing.current) return;
     
     const currentPlayer = gameState.players[gameState.currentPlayer];
-    if (currentPlayer.isBot || currentPlayer.hand.length !== 14) return;
+    if (currentPlayer.isBot) return;
+
+    // FIXED: Proper discard validation
+    // Player can discard if:
+    // 1. They have 14 tiles (normal turn after drawing)
+    // 2. They have 11 tiles (after pung/chow claim)
+    // 3. They have 10 tiles (after kong claim)
+    const validDiscardSizes = [10, 11, 14];
+    if (!validDiscardSizes.includes(currentPlayer.hand.length)) {
+      console.log(`❌ Player cannot discard with ${currentPlayer.hand.length} tiles`);
+      return;
+    }
 
     isProcessing.current = true;
 
@@ -564,6 +554,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       // Remove selected tile from hand
       player.hand = player.hand.filter(tile => tile.id !== selectedTile.id);
       
+      console.log(`👤 Player discarded tile, hand size now: ${player.hand.length}`);
+
       // Create discard entry
       const discardedTile: DiscardedTile = {
         tile: selectedTile,
@@ -575,6 +567,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       // Add to discard pile and update player
       newState.discardPile = [...newState.discardPile, discardedTile];
       newState.players[0] = player;
+      
+      // Reset claim flag
+      newState.lastActionWasClaim = false;
       
       soundManager.playTileSound('discard', 'bottom');
 
@@ -600,7 +595,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       // Move to next player
       newState.currentPlayer = (newState.currentPlayer + 1) % 4;
       newState.turnNumber++;
-      newState.lastActionWasClaim = false;
 
       // Check for draw conditions
       const drawCondition = checkDrawCondition(newState.wall.length, newState.turnNumber);
@@ -635,6 +629,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     
     const currentPlayer = gameState.players[gameState.currentPlayer];
     if (currentPlayer.isBot || gameState.wall.length === 0) return;
+    
+    // FIXED: Player can only draw if they have exactly 13 tiles and didn't just claim
     if (currentPlayer.hand.length !== 13 || gameState.lastActionWasClaim) return;
 
     isProcessing.current = true;
@@ -654,6 +650,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       newState.wall = newState.wall.slice(1);
       newState.players[0] = player;
       
+      console.log(`👤 Player drew tile, hand size now: ${player.hand.length}`);
       soundManager.playTileSound('draw', 'bottom');
 
       // Check if player can win
@@ -699,9 +696,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const humanPlayer = gameState.players[0];
   const isPlayerTurn = gameState.currentPlayer === 0 && !currentPlayer.isBot;
   
-  // Proper draw/discard conditions
+  // FIXED: Proper draw/discard conditions
   const canDraw = isPlayerTurn && gameState.wall.length > 0 && !gameState.lastActionWasClaim && humanPlayer.hand.length === 13 && !isProcessing.current;
-  const canDiscard = isPlayerTurn && selectedTile !== null && humanPlayer.hand.length === 14 && !isProcessing.current;
+  const canDiscard = isPlayerTurn && selectedTile !== null && [10, 11, 14].includes(humanPlayer.hand.length) && !isProcessing.current;
 
   return (
     <div className="min-h-screen p-4 relative">
