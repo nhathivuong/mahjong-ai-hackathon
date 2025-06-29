@@ -103,6 +103,9 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
     newState.winner = humanPlayer.id;
     newState.winType = 'self-drawn';
     newState.winScore = calculateWinScore(humanPlayer.hand, humanPlayer.exposedSets, 'self-drawn', humanPlayer.isDealer);
+    // Store the complete winning hand for display
+    newState.winningHand = humanPlayer.hand;
+    newState.winningExposedSets = humanPlayer.exposedSets;
     setGameState(newState);
     setShowWinButton(false);
     soundManager.playWinSound();
@@ -335,6 +338,10 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
         newState.winner = claimingPlayer.id;
         newState.winType = 'claimed';
         newState.winScore = calculateWinScore(claimingPlayer.hand, claimingPlayer.exposedSets, 'claimed', claimingPlayer.isDealer);
+        // FIXED: Store the complete winning hand including the claimed tile
+        newState.winningHand = [...claimingPlayer.hand, discardedTile];
+        newState.winningExposedSets = claimingPlayer.exposedSets;
+        newState.claimedTile = discardedTile;
         setGameState(newState);
         setBotAction(null);
         soundManager.playWinSound();
@@ -427,6 +434,10 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
       newState.winner = humanPlayer.id;
       newState.winType = 'claimed';
       newState.winScore = calculateWinScore([...humanPlayer.hand, claimOptions.discardedTile], humanPlayer.exposedSets, 'claimed', humanPlayer.isDealer);
+      // FIXED: Store the complete winning hand including the claimed tile
+      newState.winningHand = [...humanPlayer.hand, claimOptions.discardedTile];
+      newState.winningExposedSets = humanPlayer.exposedSets;
+      newState.claimedTile = claimOptions.discardedTile;
       setGameState(newState);
       setShowClaimOptions(false);
       soundManager.playWinSound();
@@ -546,6 +557,9 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
           newState.winner = player.id;
           newState.winType = 'self-drawn';
           newState.winScore = calculateWinScore(player.hand, player.exposedSets, 'self-drawn', player.isDealer);
+          // Store the complete winning hand for display
+          newState.winningHand = player.hand;
+          newState.winningExposedSets = player.exposedSets;
           setGameState(newState);
           setBotAction(null);
           soundManager.playWinSound();
@@ -672,7 +686,11 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
 
   if (gameState.gamePhase === 'finished') {
     const winner = gameState.players.find(p => p.id === gameState.winner);
-    const winningHand = winner ? analyzeWinningHand(winner.hand, winner.exposedSets) : null;
+    
+    // FIXED: Use the stored winning hand and exposed sets for proper display
+    const winningHand = gameState.winningHand || winner?.hand || [];
+    const winningExposedSets = gameState.winningExposedSets || winner?.exposedSets || [];
+    const handAnalysis = analyzeWinningHand(winningHand, winningExposedSets);
     
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -683,27 +701,62 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
             {winner?.name} Wins!
           </p>
           
-          {winningHand && (
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Winning Hand</h3>
-              <div className="bg-emerald-800/30 rounded-xl p-4 mb-4">
-                <div className="flex flex-wrap gap-2 justify-center mb-4">
-                  {winningHand.allTiles.map((tile, index) => (
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Winning Hand</h3>
+            <div className="bg-emerald-800/30 rounded-xl p-4 mb-4">
+              {/* Display exposed sets first */}
+              {winningExposedSets.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-emerald-200 text-sm mb-2">Exposed Sets:</p>
+                  <div className="flex flex-wrap gap-2 justify-center mb-4">
+                    {winningExposedSets.map((set, setIndex) => (
+                      <div key={setIndex} className="flex gap-1 bg-white/10 rounded-lg p-2">
+                        {set.map((tile, tileIndex) => (
+                          <TileComponent
+                            key={`exposed-${setIndex}-${tileIndex}`}
+                            tile={tile}
+                            className="shadow-lg"
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Display complete winning hand */}
+              <div className="mb-4">
+                <p className="text-emerald-200 text-sm mb-2">
+                  {winningExposedSets.length > 0 ? 'Hand Tiles:' : 'Complete Hand:'}
+                </p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {winningHand.map((tile, index) => (
                     <TileComponent
-                      key={`${tile.id}-${index}`}
+                      key={`hand-${index}`}
                       tile={tile}
-                      className="shadow-lg"
+                      className={`shadow-lg ${
+                        gameState.claimedTile && tile.id === gameState.claimedTile.id 
+                          ? 'border-2 border-amber-400 bg-amber-100' 
+                          : ''
+                      }`}
                     />
                   ))}
                 </div>
-                <div className="text-emerald-200 text-sm">
-                  <p><strong>Hand Type:</strong> {winningHand.handType}</p>
-                  <p><strong>Win Type:</strong> {gameState.winType === 'self-drawn' ? 'Self-drawn' : 'Claimed'}</p>
-                  <p><strong>Score:</strong> {gameState.winScore} points</p>
-                </div>
+                {gameState.claimedTile && (
+                  <p className="text-amber-300 text-xs mt-2">
+                    ⭐ Highlighted tile was claimed to complete the winning hand
+                  </p>
+                )}
+              </div>
+              
+              <div className="text-emerald-200 text-sm">
+                <p><strong>Hand Type:</strong> {handAnalysis.handType}</p>
+                <p><strong>Win Type:</strong> {gameState.winType === 'self-drawn' ? 'Self-drawn' : 'Claimed'}</p>
+                <p><strong>Score:</strong> {gameState.winScore} points</p>
+                <p><strong>Total Tiles:</strong> {winningHand.length + winningExposedSets.flat().length}</p>
               </div>
             </div>
-          )}
+          </div>
           
           <button
             onClick={() => setGameState(initializeGame())}
