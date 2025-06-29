@@ -742,7 +742,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               </div>
             </div>
 
-            {/* Bottom Player (Human) */}
+            {/* Bottom Player (Human) - RESTORED SECTION */}
             <div>
               <div className="text-center mb-3">
                 <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
@@ -778,7 +778,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 </div>
               )}
 
-              {/* Human Player Hand */}
+              {/* Human Player Hand - RESTORED */}
               <div className="flex flex-wrap gap-2 justify-center mb-4">
                 {humanPlayer.hand.map((tile) => (
                   <TileComponent
@@ -791,7 +791,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 ))}
               </div>
 
-              {/* Discard Button */}
+              {/* Discard Button - RESTORED */}
               {gameState.currentPlayer === 0 && selectedTile && (
                 <div className="text-center">
                   <button
