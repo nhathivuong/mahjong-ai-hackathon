@@ -18,16 +18,18 @@ import { SoundManager } from '../utils/soundUtils';
 import TileComponent from './TileComponent';
 import BotActionIndicator, { BotActionType } from './BotActionIndicator';
 import DiscardHistory from './DiscardHistory';
-import { Settings, Volume2, VolumeX, Trophy, Users, Clock, Shuffle } from 'lucide-react';
+import { Settings, Volume2, VolumeX, Trophy, Users, Clock, Shuffle, X } from 'lucide-react';
 
 interface GameBoardProps {
   gameMode: 'bot' | 'multiplayer';
 }
 
 interface ClaimOption {
-  type: 'chow' | 'pung' | 'kong';
+  type: 'chow' | 'pung' | 'kong' | 'win';
   tiles: Tile[];
   playerId: string;
+  playerName: string;
+  discardedTile: Tile;
 }
 
 interface BotAction {
@@ -136,13 +138,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   };
 
-  // Check for possible claims by all players
-  const checkForClaims = (state: GameState, discardedTile: DiscardedTile): any[] => {
+  // FIXED: Separate bot claims from human claims
+  const checkForBotClaims = (state: GameState, discardedTile: DiscardedTile): any[] => {
     const claims: any[] = [];
     const discardingPlayerIndex = state.players.findIndex(p => p.id === discardedTile.playerId);
     
     state.players.forEach((player, index) => {
-      if (index === discardingPlayerIndex) return; // Can't claim own discard
+      if (index === discardingPlayerIndex || !player.isBot) return; // Skip discarding player and human players
       
       // Check for win first (highest priority)
       const testHand = [...player.hand, discardedTile.tile];
@@ -192,6 +194,68 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     
     // Sort by priority (highest first)
     return claims.sort((a, b) => b.priority - a.priority);
+  };
+
+  // NEW: Check for human player claims
+  const checkForHumanClaims = (state: GameState, discardedTile: DiscardedTile): ClaimOption[] => {
+    const claims: ClaimOption[] = [];
+    const discardingPlayerIndex = state.players.findIndex(p => p.id === discardedTile.playerId);
+    const humanPlayer = state.players[0]; // Assuming human is always player 0
+    
+    // Don't allow claiming own discard
+    if (discardingPlayerIndex === 0) return claims;
+    
+    // Check for win first (highest priority)
+    const testHand = [...humanPlayer.hand, discardedTile.tile];
+    if (isWinningHand(testHand, humanPlayer.exposedSets)) {
+      claims.push({
+        type: 'win',
+        tiles: [discardedTile.tile],
+        playerId: humanPlayer.id,
+        playerName: humanPlayer.name,
+        discardedTile: discardedTile.tile
+      });
+    }
+    
+    // Check for kong
+    const kongTiles = canFormKong(humanPlayer.hand, discardedTile.tile);
+    if (kongTiles) {
+      claims.push({
+        type: 'kong',
+        tiles: kongTiles,
+        playerId: humanPlayer.id,
+        playerName: humanPlayer.name,
+        discardedTile: discardedTile.tile
+      });
+    }
+    
+    // Check for pung
+    const pungTiles = canFormPung(humanPlayer.hand, discardedTile.tile);
+    if (pungTiles) {
+      claims.push({
+        type: 'pung',
+        tiles: pungTiles,
+        playerId: humanPlayer.id,
+        playerName: humanPlayer.name,
+        discardedTile: discardedTile.tile
+      });
+    }
+    
+    // Check for chow (only if human is next player)
+    if (0 === (discardingPlayerIndex + 1) % 4) {
+      const chowOptions = canFormChow(humanPlayer.hand, discardedTile.tile);
+      chowOptions.forEach(chowTiles => {
+        claims.push({
+          type: 'chow',
+          tiles: chowTiles,
+          playerId: humanPlayer.id,
+          playerName: humanPlayer.name,
+          discardedTile: discardedTile.tile
+        });
+      });
+    }
+    
+    return claims;
   };
 
   // Handle bot claims with proper state management
@@ -288,6 +352,92 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   };
 
+  // NEW: Handle human claim selection
+  const handleHumanClaim = (claimOption: ClaimOption) => {
+    if (!gameState) return;
+
+    setGameState(prevState => {
+      if (!prevState) return prevState;
+
+      const newState = { ...prevState };
+      const humanPlayer = { ...newState.players[0] };
+      
+      // Handle win claim
+      if (claimOption.type === 'win') {
+        const testHand = [...humanPlayer.hand, claimOption.discardedTile];
+        const analysis = analyzeWinningHand(testHand, humanPlayer.exposedSets);
+        const score = calculateWinScore(testHand, humanPlayer.exposedSets, 'claimed', humanPlayer.isDealer);
+        
+        setWinDetails({
+          winner: humanPlayer.name,
+          winType: 'claimed',
+          score,
+          analysis,
+          allPlayers: newState.players
+        });
+
+        newState.gamePhase = 'finished';
+        newState.winner = humanPlayer.id;
+        newState.winType = 'claimed';
+        newState.winScore = score;
+
+        soundManager.playWinSound();
+        setTimeout(() => setShowWinModal(true), 500);
+        
+        return newState;
+      }
+
+      // Handle other claims (kong, pung, chow)
+      // Remove the discarded tile from discard pile
+      newState.discardPile = newState.discardPile.filter(d => d.tile.id !== claimOption.discardedTile.id);
+      
+      // Form the set
+      const claimedSet = [...claimOption.tiles, claimOption.discardedTile];
+      
+      // Remove tiles from hand
+      humanPlayer.hand = humanPlayer.hand.filter(tile => 
+        !claimOption.tiles.some(ct => ct.id === tile.id)
+      );
+      
+      // Add to exposed sets
+      humanPlayer.exposedSets.push(claimedSet);
+      humanPlayer.hand = sortTiles(humanPlayer.hand);
+      
+      // Update state
+      newState.players[0] = humanPlayer;
+      newState.currentPlayer = 0; // Human player's turn to discard
+      newState.lastActionWasClaim = true;
+      
+      soundManager.playTileSound('claim', 'bottom');
+      
+      return newState;
+    });
+
+    // Close claim dialog
+    setShowClaimDialog(false);
+    setClaimOptions([]);
+  };
+
+  // NEW: Handle declining claims
+  const handleDeclineClaim = () => {
+    setShowClaimDialog(false);
+    setClaimOptions([]);
+    
+    // Continue with normal game flow - move to next player
+    if (gameState) {
+      setGameState(prevState => {
+        if (!prevState) return prevState;
+        
+        const newState = { ...prevState };
+        newState.currentPlayer = (newState.currentPlayer + 1) % 4;
+        newState.turnNumber++;
+        
+        soundManager.playTransitionSound('turn-change');
+        return newState;
+      });
+    }
+  };
+
   // Execute bot turn with proper async handling
   const executeBotTurn = useCallback(async () => {
     if (isProcessing.current) return;
@@ -319,16 +469,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       console.log(`🤖 Bot ${botPlayer.name} hand size: ${botPlayer.hand.length}, lastActionWasClaim: ${newState.lastActionWasClaim}`);
 
       // FIXED: Proper turn flow logic
-      // 1. If bot just claimed, they must discard (hand size varies based on claim type)
-      // 2. If bot didn't claim and has 13 tiles, they must draw first
-      // 3. If bot has 14 tiles, they must discard
-
       if (newState.lastActionWasClaim) {
-        // Bot just claimed, must discard without drawing
-        // Hand size after claim: 13 - tiles_used_in_claim
-        // Kong: 13 - 3 = 10 tiles
-        // Pung: 13 - 2 = 11 tiles  
-        // Chow: 13 - 2 = 11 tiles
         console.log(`🤖 Bot ${botPlayer.name} must discard after claim`);
       } else if (botPlayer.hand.length === 13) {
         // Normal turn: draw first, then discard
@@ -403,7 +544,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         return prevState;
       }
 
-      // Now bot must discard (hand size should be 14, 11, or 10)
+      // Now bot must discard
       console.log(`🤖 Bot ${botPlayer.name} choosing tile to discard from ${botPlayer.hand.length} tiles`);
 
       // Bot AI: Choose tile to discard
@@ -448,12 +589,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       
       soundManager.playTileSound('discard', getPlayerPosition(botPlayer.id));
 
-      // Check for claims by other players
-      const possibleClaims = checkForClaims(newState, discardedTile);
+      // FIXED: Check for bot claims first, then human claims
+      const botClaims = checkForBotClaims(newState, discardedTile);
       
-      if (possibleClaims.length > 0) {
-        // Handle the highest priority claim
-        const topClaim = possibleClaims[0];
+      if (botClaims.length > 0) {
+        // Handle the highest priority bot claim
+        const topClaim = botClaims[0];
         
         if (topClaim.type === 'win') {
           handleBotWinClaim(newState, topClaim, discardedTile);
@@ -464,6 +605,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           isProcessing.current = false;
           return newState;
         }
+      }
+
+      // Check for human claims
+      const humanClaims = checkForHumanClaims(newState, discardedTile);
+      if (humanClaims.length > 0) {
+        setClaimOptions(humanClaims);
+        setShowClaimDialog(true);
+        isProcessing.current = false;
+        return newState;
       }
 
       // Move to next player and increment turn
@@ -498,7 +648,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   // Trigger bot turns
   useEffect(() => {
-    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current) {
+    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current || showClaimDialog) {
       return;
     }
 
@@ -506,11 +656,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     if (currentPlayer.isBot) {
       executeBotTurn();
     }
-  }, [gameState?.currentPlayer, gameState?.gamePhase, executeBotTurn]);
+  }, [gameState?.currentPlayer, gameState?.gamePhase, showClaimDialog, executeBotTurn]);
 
   // Handle player tile selection and discard
   const handleTileClick = (tile: Tile) => {
-    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current) return;
+    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current || showClaimDialog) return;
     
     const currentPlayer = gameState.players[gameState.currentPlayer];
     if (currentPlayer.isBot) return;
@@ -524,16 +674,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   // Handle player discard
   const handleDiscard = () => {
-    if (!gameState || !selectedTile || gameState.gamePhase !== 'playing' || isProcessing.current) return;
+    if (!gameState || !selectedTile || gameState.gamePhase !== 'playing' || isProcessing.current || showClaimDialog) return;
     
     const currentPlayer = gameState.players[gameState.currentPlayer];
     if (currentPlayer.isBot) return;
 
     // FIXED: Proper discard validation
-    // Player can discard if:
-    // 1. They have 14 tiles (normal turn after drawing)
-    // 2. They have 11 tiles (after pung/chow claim)
-    // 3. They have 10 tiles (after kong claim)
     const validDiscardSizes = [10, 11, 14];
     if (!validDiscardSizes.includes(currentPlayer.hand.length)) {
       console.log(`❌ Player cannot discard with ${currentPlayer.hand.length} tiles`);
@@ -573,11 +719,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       
       soundManager.playTileSound('discard', 'bottom');
 
-      // Check for bot claims
-      const possibleClaims = checkForClaims(newState, discardedTile);
+      // FIXED: Only check for bot claims, not human claims on player discard
+      const botClaims = checkForBotClaims(newState, discardedTile);
       
-      if (possibleClaims.length > 0) {
-        const topClaim = possibleClaims[0];
+      if (botClaims.length > 0) {
+        const topClaim = botClaims[0];
         
         if (topClaim.type === 'win') {
           handleBotWinClaim(newState, topClaim, discardedTile);
@@ -625,7 +771,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   // Handle player draw
   const handleDraw = () => {
-    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current) return;
+    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current || showClaimDialog) return;
     
     const currentPlayer = gameState.players[gameState.currentPlayer];
     if (currentPlayer.isBot || gameState.wall.length === 0) return;
@@ -697,8 +843,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const isPlayerTurn = gameState.currentPlayer === 0 && !currentPlayer.isBot;
   
   // FIXED: Proper draw/discard conditions
-  const canDraw = isPlayerTurn && gameState.wall.length > 0 && !gameState.lastActionWasClaim && humanPlayer.hand.length === 13 && !isProcessing.current;
-  const canDiscard = isPlayerTurn && selectedTile !== null && [10, 11, 14].includes(humanPlayer.hand.length) && !isProcessing.current;
+  const canDraw = isPlayerTurn && gameState.wall.length > 0 && !gameState.lastActionWasClaim && humanPlayer.hand.length === 13 && !isProcessing.current && !showClaimDialog;
+  const canDiscard = isPlayerTurn && selectedTile !== null && [10, 11, 14].includes(humanPlayer.hand.length) && !isProcessing.current && !showClaimDialog;
 
   return (
     <div className="min-h-screen p-4 relative">
@@ -734,6 +880,73 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           <div className="text-white text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
             <p>Processing...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Claim Dialog */}
+      {showClaimDialog && claimOptions.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-bold text-lg">Claim Available!</h3>
+              <button
+                onClick={handleDeclineClaim}
+                className="p-1 text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <p className="text-emerald-200 mb-4">
+              You can claim the discarded tile to form:
+            </p>
+            
+            <div className="space-y-3 mb-6">
+              {claimOptions.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleHumanClaim(option)}
+                  className="w-full p-4 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-all duration-300 hover:scale-105"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-left">
+                      <div className="text-white font-medium capitalize mb-1">
+                        {option.type === 'win' ? 'Mahjong!' : option.type}
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        {option.tiles.map((tile, tileIndex) => (
+                          <TileComponent
+                            key={tileIndex}
+                            tile={tile}
+                            height="compact"
+                            className="opacity-90"
+                          />
+                        ))}
+                        <span className="text-emerald-200 mx-2">+</span>
+                        <TileComponent
+                          tile={option.discardedTile}
+                          height="compact"
+                          className="opacity-90 border-2 border-amber-400"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-emerald-200 text-sm">
+                      {option.type === 'win' ? '🏆' : '→'}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={handleDeclineClaim}
+                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+              >
+                Pass
+              </button>
+            </div>
           </div>
         </div>
       )}
