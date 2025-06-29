@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameState, Player, Tile, DiscardedTile } from '../types/mahjong';
 import { 
   createTileSet, 
@@ -57,6 +57,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     bestScore: 0
   });
 
+  // FIXED: Add ref to prevent multiple bot turn executions
+  const botTurnInProgress = useRef(false);
   const soundManager = SoundManager.getInstance();
 
   // Initialize sound settings
@@ -107,6 +109,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setShowWinModal(false);
     setShowDrawModal(false);
     
+    // FIXED: Reset bot turn flag
+    botTurnInProgress.current = false;
+    
     soundManager.playTransitionSound('game-start');
   }, []);
 
@@ -114,19 +119,28 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     initializeGame();
   }, [initializeGame]);
 
-  // FIXED: Bot AI with proper turn flow
+  // FIXED: Enhanced bot AI with proper turn flow and state guards
   const executeBotTurn = useCallback((state: GameState) => {
     const currentPlayer = state.players[state.currentPlayer];
-    if (!currentPlayer.isBot) return;
+    if (!currentPlayer.isBot || botTurnInProgress.current) return;
+
+    // FIXED: Set flag to prevent multiple executions
+    botTurnInProgress.current = true;
 
     setTimeout(() => {
       setGameState(prevState => {
-        if (!prevState || prevState.gamePhase !== 'playing') return prevState;
+        if (!prevState || prevState.gamePhase !== 'playing' || botTurnInProgress.current === false) {
+          botTurnInProgress.current = false;
+          return prevState;
+        }
         
         const newState = { ...prevState };
         const player = newState.players[newState.currentPlayer];
         
-        if (!player.isBot) return prevState;
+        if (!player.isBot) {
+          botTurnInProgress.current = false;
+          return prevState;
+        }
 
         const botPlayer = { ...player };
         const botPlayerIndex = newState.currentPlayer;
@@ -160,12 +174,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           setTimeout(() => {
             setShowWinModal(true);
             setBotAction(null);
+            botTurnInProgress.current = false;
           }, 2000);
 
           return newState;
         }
 
-        // FIXED: Only draw if not from a claim and hand has 13 tiles
+        // FIXED: Only draw if not from a claim and hand has exactly 13 tiles
         if (!newState.lastActionWasClaim && botPlayer.hand.length === 13 && newState.wall.length > 0) {
           // Draw a tile
           const drawnTile = newState.wall[0];
@@ -203,6 +218,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             setTimeout(() => {
               setShowWinModal(true);
               setBotAction(null);
+              botTurnInProgress.current = false;
             }, 2000);
 
             return newState;
@@ -212,9 +228,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         // Reset the claim flag
         newState.lastActionWasClaim = false;
 
-        // FIXED: Bot must have 14 tiles to discard
+        // FIXED: Bot must have exactly 14 tiles to discard
         if (botPlayer.hand.length !== 14) {
-          console.error('Bot hand size error:', botPlayer.hand.length);
+          console.error('Bot hand size error:', botPlayer.name, botPlayer.hand.length);
+          botTurnInProgress.current = false;
           return prevState;
         }
 
@@ -262,24 +279,28 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           const winClaim = claimingPlayers.find(claim => claim.type === 'win');
           if (winClaim) {
             handleBotWinClaim(newState, winClaim, discardedTile);
+            botTurnInProgress.current = false;
             return newState;
           }
 
           const kongClaim = claimingPlayers.find(claim => claim.type === 'kong');
           if (kongClaim) {
             handleBotClaim(newState, kongClaim, discardedTile);
+            botTurnInProgress.current = false;
             return newState;
           }
 
           const pungClaim = claimingPlayers.find(claim => claim.type === 'pung');
           if (pungClaim) {
             handleBotClaim(newState, pungClaim, discardedTile);
+            botTurnInProgress.current = false;
             return newState;
           }
 
           const chowClaim = claimingPlayers.find(claim => claim.type === 'chow');
           if (chowClaim) {
             handleBotClaim(newState, chowClaim, discardedTile);
+            botTurnInProgress.current = false;
             return newState;
           }
         }
@@ -301,7 +322,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           newState.drawReason = drawCondition;
           newState.finalScores = finalScores;
           
-          setTimeout(() => setShowDrawModal(true), 1000);
+          setTimeout(() => {
+            setShowDrawModal(true);
+            botTurnInProgress.current = false;
+          }, 1000);
+        } else {
+          // FIXED: Reset bot turn flag only after successful completion
+          botTurnInProgress.current = false;
         }
 
         soundManager.playTransitionSound('turn-change');
@@ -454,15 +481,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   };
 
-  // Execute bot turns
+  // FIXED: Execute bot turns with proper state checking
   useEffect(() => {
-    if (gameState && gameState.gamePhase === 'playing') {
+    if (gameState && gameState.gamePhase === 'playing' && !botTurnInProgress.current) {
       const currentPlayer = gameState.players[gameState.currentPlayer];
       if (currentPlayer.isBot) {
         executeBotTurn(gameState);
       }
     }
-  }, [gameState, executeBotTurn]);
+  }, [gameState?.currentPlayer, gameState?.gamePhase, executeBotTurn]);
 
   // Handle player tile selection and discard
   const handleTileClick = (tile: Tile) => {
