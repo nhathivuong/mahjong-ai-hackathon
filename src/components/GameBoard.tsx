@@ -754,13 +754,9 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-7xl mx-auto">
-        {/* Game Info Header */}
+        {/* Game Info Header - Removed Round Count */}
         <div className="mb-6 text-center">
           <div className="inline-flex items-center space-x-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-6 py-3">
-            <div className="text-white">
-              <span className="text-sm text-emerald-200">Round</span>
-              <div className="font-bold">{gameState.round}</div>
-            </div>
             <div className="text-white">
               <span className="text-sm text-emerald-200">Turn</span>
               <div className="font-bold">{gameState.turnNumber}</div>
