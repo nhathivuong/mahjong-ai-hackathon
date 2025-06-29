@@ -1,4 +1,4 @@
-// Enhanced Sound utility functions for mahjong game with natural wood-like sounds
+// Enhanced Sound utility functions for mahjong game with dry, crisp wood sounds
 export class SoundManager {
   private static instance: SoundManager;
   private audioContext: AudioContext | null = null;
@@ -50,17 +50,17 @@ export class SoundManager {
     return this.isEnabled;
   }
 
-  // Generate natural wood-like tile sound with organic characteristics
-  private generateWoodTileSound(
+  // Generate dry, crisp wood tile sound with sharp attack and quick decay
+  private generateDryWoodSound(
     baseFrequency: number = 180, 
-    duration: number = 0.25,
+    duration: number = 0.08, // Much shorter for dryness
     stereoPosition: number = 0,
     intensity: number = 1.0
   ): AudioBuffer | null {
     if (!this.audioContext) return null;
 
-    // Use warmer, lower frequencies that resemble wood resonance
-    const frequency = Math.max(80, Math.min(400, baseFrequency));
+    // Use focused frequencies for crisp wood contact
+    const frequency = Math.max(120, Math.min(800, baseFrequency));
 
     const sampleRate = this.audioContext.sampleRate;
     const length = sampleRate * duration;
@@ -72,38 +72,32 @@ export class SoundManager {
     const leftGain = stereoPosition <= 0 ? 1 : 1 - stereoPosition;
     const rightGain = stereoPosition >= 0 ? 1 : 1 + stereoPosition;
 
-    // Generate natural wood-like sound with multiple components
+    // Generate dry, crisp wood contact sound
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
       
-      // Sharp attack with quick decay (like wood hitting)
-      const attackEnvelope = Math.exp(-t * 15) * (1 - Math.exp(-t * 50));
+      // Very sharp attack with rapid decay for dryness
+      const envelope = Math.exp(-t * 35) * (1 - Math.exp(-t * 100));
       
-      // Main resonant frequency (wood body resonance)
+      // Main contact frequency - clean and focused
       const fundamental = Math.sin(2 * Math.PI * frequency * t);
       
-      // Lower harmonic for wood warmth
-      const subHarmonic = Math.sin(2 * Math.PI * frequency * 0.7 * t) * 0.4;
+      // Sharp click component for initial contact
+      const clickComponent = Math.sin(2 * Math.PI * frequency * 2.5 * t) * 0.4 * Math.exp(-t * 50);
       
-      // Higher harmonic for the "click" of contact
-      const clickHarmonic = Math.sin(2 * Math.PI * frequency * 2.1 * t) * 0.2 * Math.exp(-t * 25);
+      // Minimal harmonics for cleaner sound
+      const harmonic = Math.sin(2 * Math.PI * frequency * 1.5 * t) * 0.2 * Math.exp(-t * 30);
       
-      // Wood grain texture (filtered noise)
-      const grainNoise = (Math.random() - 0.5) * 0.15 * Math.exp(-t * 8);
+      // Very minimal texture - just a hint of wood grain
+      const dryTexture = (Math.random() - 0.5) * 0.03 * Math.exp(-t * 40);
       
-      // Slight frequency modulation for natural variation
-      const vibrato = Math.sin(2 * Math.PI * 3 * t) * 0.02;
-      const modulatedFreq = frequency * (1 + vibrato);
-      const modulated = Math.sin(2 * Math.PI * modulatedFreq * t) * 0.3;
-      
-      // Combine all components
+      // Combine components with emphasis on fundamental and click
       const sample = (
-        fundamental * 0.6 + 
-        subHarmonic + 
-        clickHarmonic + 
-        modulated + 
-        grainNoise
-      ) * attackEnvelope * intensity * 0.35;
+        fundamental * 0.7 + 
+        clickComponent + 
+        harmonic + 
+        dryTexture
+      ) * envelope * intensity * 0.5;
       
       // Apply stereo positioning
       leftData[i] = sample * leftGain;
@@ -113,11 +107,11 @@ export class SoundManager {
     return buffer;
   }
 
-  // Generate smooth transition sound with wood-like characteristics
-  private generateWoodTransitionSound(
-    startFreq: number = 150,
-    endFreq: number = 220,
-    duration: number = 0.4
+  // Generate dry transition sound - shorter and more direct
+  private generateDryTransitionSound(
+    startFreq: number = 200,
+    endFreq: number = 300,
+    duration: number = 0.15 // Much shorter
   ): AudioBuffer | null {
     if (!this.audioContext) return null;
 
@@ -131,20 +125,17 @@ export class SoundManager {
       const t = i / sampleRate;
       const progress = t / duration;
       
-      // Smooth frequency transition
+      // Quick frequency sweep
       const frequency = startFreq + (endFreq - startFreq) * progress;
       
-      // Gentle envelope for smooth transitions
-      const envelope = Math.sin(Math.PI * progress) * 0.8;
+      // Sharp envelope - quick in and out
+      const envelope = Math.sin(Math.PI * progress) * Math.exp(-t * 8);
       
-      // Main tone with wood-like harmonics
+      // Clean tone with minimal harmonics
       const fundamental = Math.sin(2 * Math.PI * frequency * t);
-      const harmonic = Math.sin(2 * Math.PI * frequency * 1.4 * t) * 0.3;
+      const harmonic = Math.sin(2 * Math.PI * frequency * 1.3 * t) * 0.2;
       
-      // Subtle wood texture
-      const texture = (Math.random() - 0.5) * 0.08 * envelope;
-      
-      const sample = (fundamental + harmonic + texture) * envelope * 0.25;
+      const sample = (fundamental + harmonic) * envelope * 0.4;
       
       leftData[i] = sample;
       rightData[i] = sample;
@@ -208,22 +199,22 @@ export class SoundManager {
 
     switch (type) {
       case 'draw':
-        baseFrequency = 160; // Softer, lower for drawing
-        duration = 0.2;
+        baseFrequency = 220; // Crisp, higher for draw
+        duration = 0.06; // Very short and dry
         intensity = 0.8;
         break;
       case 'claim':
-        baseFrequency = 200; // Slightly higher for importance
-        duration = 0.3;
+        baseFrequency = 280; // Higher pitch for importance
+        duration = 0.1; // Slightly longer but still dry
         intensity = 1.1;
         break;
       default: // discard
-        baseFrequency = 180; // Natural wood resonance
-        duration = 0.25;
+        baseFrequency = 250; // Clean, focused frequency
+        duration = 0.08; // Short and crisp
         intensity = 1.0;
     }
 
-    const buffer = this.generateWoodTileSound(baseFrequency, duration, stereoPosition, intensity);
+    const buffer = this.generateDryWoodSound(baseFrequency, duration, stereoPosition, intensity);
     if (buffer) {
       this.playBuffer(buffer, 1, stereoPosition);
     }
@@ -232,24 +223,24 @@ export class SoundManager {
   public playWinSound() {
     if (!this.audioContext || !this.isEnabled) return;
 
-    // Play a pleasant ascending sequence with wood-like tones
-    const frequencies = [150, 180, 220, 280]; // Warmer, lower frequencies
+    // Play a crisp ascending sequence - shorter and drier
+    const frequencies = [200, 250, 320, 400]; // Higher, cleaner frequencies
     
     frequencies.forEach((freq, index) => {
       setTimeout(() => {
-        const buffer = this.generateWoodTileSound(freq, 0.6, 0, 0.9);
+        const buffer = this.generateDryWoodSound(freq, 0.12, 0, 0.9); // Much shorter
         if (buffer) {
           this.playBuffer(buffer, 0.8);
         }
-      }, index * 150);
+      }, index * 80); // Faster sequence
     });
   }
 
   public playErrorSound() {
     if (!this.audioContext || !this.isEnabled) return;
 
-    // Gentle error sound - not harsh
-    const buffer = this.generateWoodTileSound(120, 0.15, 0, 0.7);
+    // Sharp, dry error sound
+    const buffer = this.generateDryWoodSound(150, 0.05, 0, 0.7); // Very short
     if (buffer) {
       this.playBuffer(buffer, 0.6);
     }
@@ -262,22 +253,22 @@ export class SoundManager {
 
     switch (type) {
       case 'game-start':
-        startFreq = 140;
-        endFreq = 220;
-        duration = 0.6;
+        startFreq = 200;
+        endFreq = 350;
+        duration = 0.2; // Much shorter
         break;
       case 'round-end':
-        startFreq = 220;
-        endFreq = 140;
-        duration = 0.5;
+        startFreq = 350;
+        endFreq = 200;
+        duration = 0.18;
         break;
       default: // turn-change
-        startFreq = 160;
-        endFreq = 190;
-        duration = 0.3;
+        startFreq = 220;
+        endFreq = 280;
+        duration = 0.12; // Very short
     }
 
-    const buffer = this.generateWoodTransitionSound(startFreq, endFreq, duration);
+    const buffer = this.generateDryTransitionSound(startFreq, endFreq, duration);
     if (buffer) {
       this.playBuffer(buffer, 0.7);
     }
