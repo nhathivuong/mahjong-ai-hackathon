@@ -685,7 +685,7 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
 
   return (
     <div className="min-h-screen p-4">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Game Info Header */}
         <div className="mb-6 text-center">
           <div className="inline-flex items-center space-x-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-6 py-3">
@@ -753,9 +753,9 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
           </div>
         </div>
 
-        {/* Middle Row - Left Player, Center Discard Area (BIGGER), Right Player */}
-        <div className="grid grid-cols-5 gap-4 mb-4">
-          {/* Left Player (West Bot) - Smaller */}
+        {/* Middle Row - Left Player, Center Discard Area (MUCH WIDER - 6 columns), Right Player */}
+        <div className="grid grid-cols-8 gap-2 mb-4">
+          {/* Left Player (West Bot) - Smaller, only 1 column */}
           <div className="flex flex-col items-center">
             <div className="text-center mb-2">
               <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
@@ -800,8 +800,8 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
             </div>
           </div>
 
-          {/* Center Area - Discard History (MUCH BIGGER - 3 columns) */}
-          <div className="col-span-3 flex flex-col items-center justify-center">
+          {/* Center Area - Discard History (MUCH WIDER - 6 columns out of 8) */}
+          <div className="col-span-6 flex flex-col items-center justify-center">
             <div className="w-full">
               <DiscardHistory 
                 discardPile={gameState.discardPile} 
@@ -810,7 +810,7 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
             </div>
           </div>
 
-          {/* Right Player (East Bot) - Smaller */}
+          {/* Right Player (East Bot) - Smaller, only 1 column */}
           <div className="flex flex-col items-center">
             <div className="text-center mb-2">
               <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
