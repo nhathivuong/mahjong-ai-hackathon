@@ -65,12 +65,14 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
     kong: Tile[] | null;
     discardedTile: Tile | null;
     discardingPlayer: number;
+    canWin?: boolean; // Add win option to claim options
   }>({ chow: [], pung: null, kong: null, discardedTile: null, discardingPlayer: -1 });
   const [botAction, setBotAction] = useState<{
     action: BotActionType;
     playerName: string;
     tiles?: Tile[];
   } | null>(null);
+  const [showWinButton, setShowWinButton] = useState(false);
 
   // Calculate expected hand size based on exposed sets
   const calculateExpectedHandSize = (player: Player, isCurrentPlayer: boolean = false): { min: number; max: number } => {
@@ -85,6 +87,25 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
       // Non-current players should have 13 total tiles (hand + exposed)
       return { min: baseHandSize - 1, max: baseHandSize - 1 };
     }
+  };
+
+  // Check if human player can win
+  const checkHumanWin = () => {
+    const humanPlayer = gameState.players[0];
+    return isWinningHand(humanPlayer.hand, humanPlayer.exposedSets);
+  };
+
+  // Handle human player win
+  const handleHumanWin = () => {
+    const humanPlayer = gameState.players[0];
+    const newState = { ...gameState };
+    newState.gamePhase = 'finished';
+    newState.winner = humanPlayer.id;
+    newState.winType = 'self-drawn';
+    newState.winScore = calculateWinScore(humanPlayer.hand, humanPlayer.exposedSets, 'self-drawn', humanPlayer.isDealer);
+    setGameState(newState);
+    setShowWinButton(false);
+    soundManager.playWinSound();
   };
 
   // Handle tile selection
@@ -143,6 +164,7 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
     }
     
     setSelectedTile(null);
+    setShowWinButton(false); // Hide win button after discard
     soundManager.playTileSound('discard', 'bottom');
   };
 
@@ -238,11 +260,18 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
     const humanClaimOptions = {
       chow: [] as Tile[][],
       pung: null as Tile[] | null,
-      kong: null as Tile[] | null
+      kong: null as Tile[] | null,
+      canWin: false
     };
 
     if (hasHumanClaim) {
       const humanPlayer = state.players[0];
+      
+      // Check for win first
+      const testHand = [...humanPlayer.hand, discardedTile];
+      if (isWinningHand(testHand, humanPlayer.exposedSets)) {
+        humanClaimOptions.canWin = true;
+      }
       
       // Check for kong
       const kongTiles = canFormKong(humanPlayer.hand, discardedTile);
@@ -365,8 +394,22 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
   };
 
   // Handle claim action
-  const handleClaim = (action: 'chow' | 'pung' | 'kong', tiles?: Tile[]) => {
+  const handleClaim = (action: 'chow' | 'pung' | 'kong' | 'win', tiles?: Tile[]) => {
     if (!claimOptions.discardedTile) return;
+
+    // Handle win claim
+    if (action === 'win') {
+      const humanPlayer = gameState.players[0];
+      const newState = { ...gameState };
+      newState.gamePhase = 'finished';
+      newState.winner = humanPlayer.id;
+      newState.winType = 'claimed';
+      newState.winScore = calculateWinScore([...humanPlayer.hand, claimOptions.discardedTile], humanPlayer.exposedSets, 'claimed', humanPlayer.isDealer);
+      setGameState(newState);
+      setShowClaimOptions(false);
+      soundManager.playWinSound();
+      return;
+    }
 
     const newState = { ...gameState };
     newState.players = gameState.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets.map(set => [...set])] }));
@@ -523,7 +566,8 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
             pung: claimResult.humanClaimOptions.pung,
             kong: claimResult.humanClaimOptions.kong,
             discardedTile: tileToDiscard,
-            discardingPlayer: newState.currentPlayer
+            discardingPlayer: newState.currentPlayer,
+            canWin: claimResult.humanClaimOptions.canWin
           });
           setShowClaimOptions(true);
         } else if (claimResult.winningClaim) {
@@ -598,6 +642,15 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
       }
     }
   }, [gameState.currentPlayer, gameState.gamePhase, showClaimOptions, gameState.lastActionWasClaim, soundManager]);
+
+  // Check for human win condition when it's their turn
+  useEffect(() => {
+    if (gameState.gamePhase !== 'playing') return;
+    if (gameState.currentPlayer === 0 && !showClaimOptions) {
+      const canWin = checkHumanWin();
+      setShowWinButton(canWin);
+    }
+  }, [gameState.currentPlayer, gameState.players[0].hand, gameState.gamePhase, showClaimOptions]);
 
   const currentPlayer = gameState.players[gameState.currentPlayer];
   const humanPlayer = gameState.players[0];
@@ -903,17 +956,28 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
             ))}
           </div>
 
-          {/* Discard Button - Only show when tile is selected */}
-          {gameState.currentPlayer === 0 && selectedTile && (
-            <div className="text-center">
+          {/* Action Buttons */}
+          <div className="text-center space-x-4">
+            {/* Win Button - Show when player can win */}
+            {gameState.currentPlayer === 0 && showWinButton && (
+              <button
+                onClick={handleHumanWin}
+                className="px-8 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-lg transition-all duration-300 hover:scale-105 shadow-lg mr-4"
+              >
+                🏆 Declare Mahjong!
+              </button>
+            )}
+            
+            {/* Discard Button - Only show when tile is selected */}
+            {gameState.currentPlayer === 0 && selectedTile && (
               <button
                 onClick={() => handleDiscard(selectedTile)}
                 className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium shadow-lg"
               >
                 Discard Selected Tile
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Claim Options Modal */}
@@ -923,6 +987,17 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
               <h3 className="text-xl font-bold text-white mb-4 text-center">Claim Options</h3>
               
               <div className="space-y-3">
+                {/* Win Option - Highest Priority */}
+                {claimOptions.canWin && (
+                  <button
+                    onClick={() => handleClaim('win')}
+                    className="w-full p-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 border border-amber-400 rounded-lg transition-colors"
+                  >
+                    <div className="text-white font-bold text-lg mb-2">🏆 Mahjong! (Win)</div>
+                    <div className="text-amber-100 text-sm">Claim this tile to complete your winning hand!</div>
+                  </button>
+                )}
+
                 {claimOptions.chow.length > 0 && (
                   <div>
                     <h4 className="text-white font-medium mb-2">Chow (Sequence)</h4>
