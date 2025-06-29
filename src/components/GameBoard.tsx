@@ -413,35 +413,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   }, [gameState.currentPlayer, gameState.gamePhase, showClaimOptions, gameState.lastActionWasClaim, soundManager]);
 
-  // Organize discards by player position for authentic layout
-  const organizeDiscardsByPosition = () => {
-    const discardsByPosition = {
-      bottom: [] as DiscardedTile[],
-      right: [] as DiscardedTile[],
-      top: [] as DiscardedTile[],
-      left: [] as DiscardedTile[]
-    };
-
-    gameState.discardPile.forEach(discard => {
-      switch (discard.playerId) {
-        case 'player1':
-          discardsByPosition.bottom.push(discard);
-          break;
-        case 'bot1':
-          discardsByPosition.right.push(discard);
-          break;
-        case 'bot2':
-          discardsByPosition.top.push(discard);
-          break;
-        case 'bot3':
-          discardsByPosition.left.push(discard);
-          break;
-      }
-    });
-
-    return discardsByPosition;
-  };
-
   const currentPlayer = gameState.players[gameState.currentPlayer];
   const humanPlayer = gameState.players[0];
 
@@ -526,8 +497,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     );
   }
 
-  const discardsByPosition = organizeDiscardsByPosition();
-
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-7xl mx-auto">
@@ -553,14 +522,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         </div>
 
-        {/* Main Game Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Game Board - Takes up 3 columns */}
-          <div className="lg:col-span-3">
+        {/* Authentic Mahjong Table Layout */}
+        <div className="relative w-full max-w-5xl mx-auto">
+          {/* Table Background */}
+          <div className="bg-emerald-900/40 backdrop-blur-sm rounded-3xl border-4 border-emerald-600/30 p-8 relative min-h-[600px]">
+            
             {/* Top Player (Bot 2) */}
-            <div className="mb-6">
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
               <div className="text-center mb-3">
-                <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
+                <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
                   gameState.currentPlayer === 2 
                     ? 'bg-amber-500 text-white shadow-lg' 
                     : 'bg-white/20 text-white'
@@ -576,9 +546,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               {/* Exposed Sets */}
               {gameState.players[2].exposedSets.length > 0 && (
                 <div className="mb-3 flex justify-center">
-                  <div className="flex flex-wrap gap-2 justify-center">
+                  <div className="flex flex-wrap gap-1 justify-center">
                     {gameState.players[2].exposedSets.map((set, setIndex) => (
-                      <div key={setIndex} className="flex gap-1 bg-white/10 rounded-lg p-2">
+                      <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
                         {set.map((tile, tileIndex) => (
                           <TileComponent
                             key={`${tile.id}-${tileIndex}`}
@@ -598,176 +568,162 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 {Array.from({ length: gameState.players[2].hand.length }).map((_, index) => (
                   <div
                     key={index}
-                    className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
+                    className="w-8 h-12 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
                   />
                 ))}
               </div>
             </div>
 
-            {/* Middle Row - Left Player, Center Discard Area, Right Player */}
-            <div className="grid grid-cols-3 gap-6 mb-6">
-              {/* Left Player (Bot 3) */}
-              <div className="flex flex-col items-center">
-                <div className="text-center mb-3">
-                  <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
-                    gameState.currentPlayer === 3 
-                      ? 'bg-amber-500 text-white shadow-lg' 
-                      : 'bg-white/20 text-white'
-                  }`}>
-                    <span className="mr-2">{gameState.players[3].name}</span>
-                    {gameState.currentPlayer === 3 && <span className="animate-pulse">●</span>}
-                  </div>
-                  <div className="text-xs text-emerald-200 mt-1">
-                    Hand: {gameState.players[3].hand.length} | Sets: {gameState.players[3].exposedSets.length}
-                  </div>
-                </div>
-
-                {/* Exposed Sets */}
-                {gameState.players[3].exposedSets.length > 0 && (
-                  <div className="mb-3">
-                    <div className="flex flex-col gap-1">
-                      {gameState.players[3].exposedSets.map((set, setIndex) => (
-                        <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
-                          {set.map((tile, tileIndex) => (
-                            <TileComponent
-                              key={`${tile.id}-${tileIndex}`}
-                              tile={tile}
-                              height="compact"
-                              className="opacity-90"
-                            />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Bot Hand (Hidden) */}
-                <div className="flex flex-col gap-1">
-                  {Array.from({ length: gameState.players[3].hand.length }).map((_, index) => (
-                    <div
-                      key={index}
-                      className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
-                    />
-                  ))}
+            {/* Left Player (Bot 3) */}
+            <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+              <div className="text-center mb-3 -rotate-90">
+                <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
+                  gameState.currentPlayer === 3 
+                    ? 'bg-amber-500 text-white shadow-lg' 
+                    : 'bg-white/20 text-white'
+                }`}>
+                  <span className="mr-2">{gameState.players[3].name}</span>
+                  {gameState.currentPlayer === 3 && <span className="animate-pulse">●</span>}
                 </div>
               </div>
 
-              {/* Center Area - Complete Discard History (Real Mahjong Style) */}
-              <div className="flex flex-col items-center justify-center">
-                <div className="bg-emerald-900/40 backdrop-blur-sm rounded-xl p-4 border border-emerald-600/30 w-full min-h-[300px] relative">
-                  <div className="text-white font-medium mb-3 text-center text-sm">Discard Pool</div>
-                  
-                  {gameState.discardPile.length === 0 ? (
-                    <div className="flex items-center justify-center h-full text-emerald-200">
-                      <div className="text-center">
-                        <div className="text-4xl mb-2">🀄</div>
-                        <p className="text-sm">No discards yet</p>
-                      </div>
+              {/* Exposed Sets */}
+              {gameState.players[3].exposedSets.length > 0 && (
+                <div className="mb-3 flex flex-col items-center">
+                  {gameState.players[3].exposedSets.map((set, setIndex) => (
+                    <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1 mb-1">
+                      {set.map((tile, tileIndex) => (
+                        <TileComponent
+                          key={`${tile.id}-${tileIndex}`}
+                          tile={tile}
+                          height="compact"
+                          className="opacity-90 transform rotate-90"
+                        />
+                      ))}
                     </div>
-                  ) : (
-                    <div className="relative h-full">
-                      {/* Authentic Mahjong Discard Layout */}
-                      <div className="grid grid-cols-6 gap-1 justify-center items-center h-full p-2">
-                        {gameState.discardPile.map((discard, index) => {
-                          // Determine position based on player and order
-                          const isRecent = index >= gameState.discardPile.length - 6;
-                          const playerColors = {
-                            'player1': 'border-blue-400/50',
-                            'bot1': 'border-green-400/50', 
-                            'bot2': 'border-red-400/50',
-                            'bot3': 'border-purple-400/50'
-                          };
-                          
-                          return (
-                            <div 
-                              key={`${discard.tile.id}-${index}`}
-                              className={`relative ${isRecent ? 'animate-pulse' : ''}`}
-                            >
-                              <TileComponent
-                                tile={discard.tile}
-                                height="compact"
-                                className={`
-                                  ${isRecent ? 'shadow-lg scale-105' : 'opacity-80 scale-95'}
-                                  ${playerColors[discard.playerId as keyof typeof playerColors] || 'border-gray-400/50'}
-                                  border-2 transition-all duration-300 hover:scale-110 hover:opacity-100
-                                `}
-                              />
-                              {/* Turn number indicator */}
-                              <div className="absolute -top-1 -right-1 bg-black/70 text-white text-[8px] rounded-full w-3 h-3 flex items-center justify-center font-bold">
-                                {discard.turnNumber}
-                              </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Bot Hand (Hidden) */}
+              <div className="flex flex-col gap-1">
+                {Array.from({ length: gameState.players[3].hand.length }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="w-8 h-12 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md transform rotate-90"
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Right Player (Bot 1) */}
+            <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+              <div className="text-center mb-3 rotate-90">
+                <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
+                  gameState.currentPlayer === 1 
+                    ? 'bg-amber-500 text-white shadow-lg' 
+                    : 'bg-white/20 text-white'
+                }`}>
+                  <span className="mr-2">{gameState.players[1].name}</span>
+                  {gameState.currentPlayer === 1 && <span className="animate-pulse">●</span>}
+                </div>
+              </div>
+
+              {/* Exposed Sets */}
+              {gameState.players[1].exposedSets.length > 0 && (
+                <div className="mb-3 flex flex-col items-center">
+                  {gameState.players[1].exposedSets.map((set, setIndex) => (
+                    <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1 mb-1">
+                      {set.map((tile, tileIndex) => (
+                        <TileComponent
+                          key={`${tile.id}-${tileIndex}`}
+                          tile={tile}
+                          height="compact"
+                          className="opacity-90 transform -rotate-90"
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Bot Hand (Hidden) */}
+              <div className="flex flex-col gap-1">
+                {Array.from({ length: gameState.players[1].hand.length }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="w-8 h-12 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md transform -rotate-90"
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* CENTER - AUTHENTIC DISCARD POOL */}
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80">
+              <div className="bg-emerald-800/20 rounded-2xl border-2 border-emerald-600/40 p-4 w-full h-full relative">
+                <div className="text-white font-medium text-center mb-2 text-sm">Discard Pool</div>
+                
+                {gameState.discardPile.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-emerald-200">
+                    <div className="text-center">
+                      <div className="text-4xl mb-2">🀄</div>
+                      <p className="text-sm">No discards yet</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full overflow-hidden">
+                    {/* Authentic Mahjong Discard Layout - Organized by Player Position */}
+                    <div className="grid grid-cols-6 gap-1 h-full content-start">
+                      {gameState.discardPile.map((discard, index) => {
+                        const isRecent = index >= gameState.discardPile.length - 6;
+                        const playerColors = {
+                          'player1': 'border-blue-400/60 bg-blue-500/10',
+                          'bot1': 'border-green-400/60 bg-green-500/10', 
+                          'bot2': 'border-red-400/60 bg-red-500/10',
+                          'bot3': 'border-purple-400/60 bg-purple-500/10'
+                        };
+                        
+                        return (
+                          <div 
+                            key={`${discard.tile.id}-${index}`}
+                            className={`relative ${isRecent ? 'animate-pulse' : ''}`}
+                          >
+                            <TileComponent
+                              tile={discard.tile}
+                              height="compact"
+                              className={`
+                                ${isRecent ? 'shadow-lg scale-105 border-2' : 'opacity-80 scale-90 border'}
+                                ${playerColors[discard.playerId as keyof typeof playerColors] || 'border-gray-400/50'}
+                                transition-all duration-300 hover:scale-110 hover:opacity-100
+                              `}
+                            />
+                            {/* Turn number indicator */}
+                            <div className="absolute -top-1 -right-1 bg-black/70 text-white text-[8px] rounded-full w-3 h-3 flex items-center justify-center font-bold">
+                              {discard.turnNumber}
                             </div>
-                          );
-                        })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Most recent discard info */}
+                    {gameState.discardPile.length > 0 && (
+                      <div className="absolute bottom-1 left-1 right-1 bg-black/60 rounded-lg p-1 text-center">
+                        <div className="text-amber-400 text-xs font-medium">
+                          Last: {gameState.discardPile[gameState.discardPile.length - 1].playerName}
+                        </div>
+                        <div className="text-emerald-200 text-[10px]">
+                          Turn {gameState.discardPile[gameState.discardPile.length - 1].turnNumber}
+                        </div>
                       </div>
-                      
-                      {/* Most recent discard highlight */}
-                      {gameState.discardPile.length > 0 && (
-                        <div className="absolute bottom-2 left-2 right-2 bg-black/50 rounded-lg p-2 text-center">
-                          <div className="text-amber-400 text-xs font-medium">
-                            Last: {gameState.discardPile[gameState.discardPile.length - 1].playerName}
-                          </div>
-                          <div className="text-emerald-200 text-[10px]">
-                            Turn {gameState.discardPile[gameState.discardPile.length - 1].turnNumber}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Player (Bot 1) */}
-              <div className="flex flex-col items-center">
-                <div className="text-center mb-3">
-                  <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
-                    gameState.currentPlayer === 1 
-                      ? 'bg-amber-500 text-white shadow-lg' 
-                      : 'bg-white/20 text-white'
-                  }`}>
-                    <span className="mr-2">{gameState.players[1].name}</span>
-                    {gameState.currentPlayer === 1 && <span className="animate-pulse">●</span>}
-                  </div>
-                  <div className="text-xs text-emerald-200 mt-1">
-                    Hand: {gameState.players[1].hand.length} | Sets: {gameState.players[1].exposedSets.length}
-                  </div>
-                </div>
-
-                {/* Exposed Sets */}
-                {gameState.players[1].exposedSets.length > 0 && (
-                  <div className="mb-3">
-                    <div className="flex flex-col gap-1">
-                      {gameState.players[1].exposedSets.map((set, setIndex) => (
-                        <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
-                          {set.map((tile, tileIndex) => (
-                            <TileComponent
-                              key={`${tile.id}-${tileIndex}`}
-                              tile={tile}
-                              height="compact"
-                              className="opacity-90"
-                            />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
+                    )}
                   </div>
                 )}
-
-                {/* Bot Hand (Hidden) */}
-                <div className="flex flex-col gap-1">
-                  {Array.from({ length: gameState.players[1].hand.length }).map((_, index) => (
-                    <div
-                      key={index}
-                      className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
-                    />
-                  ))}
-                </div>
               </div>
             </div>
 
             {/* Bottom Player (Human) */}
-            <div>
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
               <div className="text-center mb-3">
                 <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
                   gameState.currentPlayer === 0 
@@ -784,10 +740,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
               {/* Exposed Sets */}
               {humanPlayer.exposedSets.length > 0 && (
-                <div className="mb-4 flex justify-center">
-                  <div className="flex flex-wrap gap-2 justify-center">
+                <div className="mb-3 flex justify-center">
+                  <div className="flex flex-wrap gap-1 justify-center">
                     {humanPlayer.exposedSets.map((set, setIndex) => (
-                      <div key={setIndex} className="flex gap-1 bg-white/10 rounded-lg p-2">
+                      <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
                         {set.map((tile, tileIndex) => (
                           <TileComponent
                             key={`${tile.id}-${tileIndex}`}
@@ -803,7 +759,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               )}
 
               {/* Human Player Hand */}
-              <div className="flex flex-wrap gap-2 justify-center mb-4">
+              <div className="flex flex-wrap gap-1 justify-center">
                 {humanPlayer.hand.map((tile) => (
                   <TileComponent
                     key={tile.id}
@@ -814,28 +770,28 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                   />
                 ))}
               </div>
-
-              {/* Discard Button */}
-              {gameState.currentPlayer === 0 && selectedTile && (
-                <div className="text-center">
-                  <button
-                    onClick={() => handleDiscard(selectedTile)}
-                    className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium shadow-lg"
-                  >
-                    Discard Selected Tile
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Side Panel - Discard History (Detailed View) */}
-          <div className="lg:col-span-1">
-            <DiscardHistory 
-              discardPile={gameState.discardPile} 
-              players={gameState.players.map(p => ({ id: p.id, name: p.name }))}
-            />
-          </div>
+          {/* Discard Button - Outside the table */}
+          {gameState.currentPlayer === 0 && selectedTile && (
+            <div className="text-center mt-6">
+              <button
+                onClick={() => handleDiscard(selectedTile)}
+                className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium shadow-lg"
+              >
+                Discard Selected Tile
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Side Panel - Detailed Discard History */}
+        <div className="mt-8">
+          <DiscardHistory 
+            discardPile={gameState.discardPile} 
+            players={gameState.players.map(p => ({ id: p.id, name: p.name }))}
+          />
         </div>
 
         {/* Claim Options Modal */}
