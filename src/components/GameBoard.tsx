@@ -708,10 +708,10 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
           </div>
         </div>
 
-        {/* Top Player (North Bot) */}
-        <div className="mb-6">
-          <div className="text-center mb-3">
-            <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
+        {/* Top Player (North Bot) - Smaller tiles */}
+        <div className="mb-4">
+          <div className="text-center mb-2">
+            <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
               gameState.currentPlayer === 2 
                 ? 'bg-amber-500 text-white shadow-lg' 
                 : 'bg-white/20 text-white'
@@ -722,18 +722,18 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
             </div>
           </div>
 
-          {/* Exposed Sets */}
+          {/* Exposed Sets - Smaller */}
           {gameState.players[2].exposedSets.length > 0 && (
-            <div className="mb-3 flex justify-center">
-              <div className="flex flex-wrap gap-2 justify-center">
+            <div className="mb-2 flex justify-center">
+              <div className="flex flex-wrap gap-1 justify-center">
                 {gameState.players[2].exposedSets.map((set, setIndex) => (
-                  <div key={setIndex} className="flex gap-1 bg-white/10 rounded-lg p-2">
+                  <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
                     {set.map((tile, tileIndex) => (
                       <TileComponent
                         key={`${tile.id}-${tileIndex}`}
                         tile={tile}
                         height="compact"
-                        className="opacity-90"
+                        className="opacity-90 scale-75"
                       />
                     ))}
                   </div>
@@ -742,45 +742,45 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
             </div>
           )}
 
-          {/* Bot Hand (Hidden) */}
-          <div className="flex gap-1 justify-center">
+          {/* Bot Hand (Hidden) - Much smaller */}
+          <div className="flex gap-0.5 justify-center">
             {Array.from({ length: gameState.players[2].hand.length }).map((_, index) => (
               <div
                 key={index}
-                className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
+                className="w-8 h-12 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
               />
             ))}
           </div>
         </div>
 
-        {/* Middle Row - Left Player, Center Discard Area, Right Player */}
-        <div className="grid grid-cols-3 gap-6 mb-6">
-          {/* Left Player (West Bot) */}
+        {/* Middle Row - Left Player, Center Discard Area (BIGGER), Right Player */}
+        <div className="grid grid-cols-5 gap-4 mb-4">
+          {/* Left Player (West Bot) - Smaller */}
           <div className="flex flex-col items-center">
-            <div className="text-center mb-3">
-              <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
+            <div className="text-center mb-2">
+              <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
                 gameState.currentPlayer === 3 
                   ? 'bg-amber-500 text-white shadow-lg' 
                   : 'bg-white/20 text-white'
               }`}>
-                <span className="mr-2">{gameState.players[3].name}</span>
-                <span className="text-xs text-emerald-200">{gameState.players[3].hand.length} tiles</span>
-                {gameState.currentPlayer === 3 && <span className="ml-2 animate-pulse">●</span>}
+                <span className="mr-1">{gameState.players[3].name}</span>
+                <span className="text-[10px] text-emerald-200">{gameState.players[3].hand.length}</span>
+                {gameState.currentPlayer === 3 && <span className="ml-1 animate-pulse">●</span>}
               </div>
             </div>
 
-            {/* Exposed Sets */}
+            {/* Exposed Sets - Smaller */}
             {gameState.players[3].exposedSets.length > 0 && (
-              <div className="mb-3">
-                <div className="flex flex-col gap-1">
+              <div className="mb-2">
+                <div className="flex flex-col gap-0.5">
                   {gameState.players[3].exposedSets.map((set, setIndex) => (
-                    <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
+                    <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-0.5">
                       {set.map((tile, tileIndex) => (
                         <TileComponent
                           key={`${tile.id}-${tileIndex}`}
                           tile={tile}
                           height="compact"
-                          className="opacity-90"
+                          className="opacity-90 scale-75"
                         />
                       ))}
                     </div>
@@ -789,51 +789,53 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
               </div>
             )}
 
-            {/* Bot Hand (Hidden) */}
-            <div className="flex flex-col gap-1">
+            {/* Bot Hand (Hidden) - Much smaller */}
+            <div className="flex flex-col gap-0.5">
               {Array.from({ length: gameState.players[3].hand.length }).map((_, index) => (
                 <div
                   key={index}
-                  className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
+                  className="w-8 h-12 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
                 />
               ))}
             </div>
           </div>
 
-          {/* Center Area - Discard History */}
-          <div className="flex flex-col items-center justify-center">
-            <DiscardHistory 
-              discardPile={gameState.discardPile} 
-              players={gameState.players.map(p => ({ id: p.id, name: p.name }))}
-            />
+          {/* Center Area - Discard History (MUCH BIGGER - 3 columns) */}
+          <div className="col-span-3 flex flex-col items-center justify-center">
+            <div className="w-full">
+              <DiscardHistory 
+                discardPile={gameState.discardPile} 
+                players={gameState.players.map(p => ({ id: p.id, name: p.name }))}
+              />
+            </div>
           </div>
 
-          {/* Right Player (East Bot) */}
+          {/* Right Player (East Bot) - Smaller */}
           <div className="flex flex-col items-center">
-            <div className="text-center mb-3">
-              <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
+            <div className="text-center mb-2">
+              <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
                 gameState.currentPlayer === 1 
                   ? 'bg-amber-500 text-white shadow-lg' 
                   : 'bg-white/20 text-white'
               }`}>
-                <span className="mr-2">{gameState.players[1].name}</span>
-                <span className="text-xs text-emerald-200">{gameState.players[1].hand.length} tiles</span>
-                {gameState.currentPlayer === 1 && <span className="ml-2 animate-pulse">●</span>}
+                <span className="mr-1">{gameState.players[1].name}</span>
+                <span className="text-[10px] text-emerald-200">{gameState.players[1].hand.length}</span>
+                {gameState.currentPlayer === 1 && <span className="ml-1 animate-pulse">●</span>}
               </div>
             </div>
 
-            {/* Exposed Sets */}
+            {/* Exposed Sets - Smaller */}
             {gameState.players[1].exposedSets.length > 0 && (
-              <div className="mb-3">
-                <div className="flex flex-col gap-1">
+              <div className="mb-2">
+                <div className="flex flex-col gap-0.5">
                   {gameState.players[1].exposedSets.map((set, setIndex) => (
-                    <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
+                    <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-0.5">
                       {set.map((tile, tileIndex) => (
                         <TileComponent
                           key={`${tile.id}-${tileIndex}`}
                           tile={tile}
                           height="compact"
-                          className="opacity-90"
+                          className="opacity-90 scale-75"
                         />
                       ))}
                     </div>
@@ -842,19 +844,19 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
               </div>
             )}
 
-            {/* Bot Hand (Hidden) */}
-            <div className="flex flex-col gap-1">
+            {/* Bot Hand (Hidden) - Much smaller */}
+            <div className="flex flex-col gap-0.5">
               {Array.from({ length: gameState.players[1].hand.length }).map((_, index) => (
                 <div
                   key={index}
-                  className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
+                  className="w-8 h-12 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
                 />
               ))}
             </div>
           </div>
         </div>
 
-        {/* Bottom Player (Human) */}
+        {/* Bottom Player (Human) - Keep normal size */}
         <div>
           <div className="text-center mb-3">
             <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
