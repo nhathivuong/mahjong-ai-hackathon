@@ -1,10 +1,10 @@
-// Enhanced Sound utility functions for mahjong game with dry, crisp wood sounds
+// Enhanced Sound utility functions for mahjong game with warmer, louder wood sounds
 export class SoundManager {
   private static instance: SoundManager;
   private audioContext: AudioContext | null = null;
   private sounds: Map<string, AudioBuffer> = new Map();
-  private masterVolume: number = 0.7;
-  private sfxVolume: number = 0.8;
+  private masterVolume: number = 0.85; // Increased from 0.7
+  private sfxVolume: number = 0.9; // Increased from 0.8
   private isEnabled: boolean = true;
 
   private constructor() {
@@ -50,17 +50,17 @@ export class SoundManager {
     return this.isEnabled;
   }
 
-  // Generate dry, crisp wood tile sound with sharp attack and quick decay
+  // Generate dry, crisp wood tile sound with warmer, lower frequencies
   private generateDryWoodSound(
-    baseFrequency: number = 180, 
-    duration: number = 0.08, // Much shorter for dryness
+    baseFrequency: number = 140, // Lowered from 180
+    duration: number = 0.08,
     stereoPosition: number = 0,
     intensity: number = 1.0
   ): AudioBuffer | null {
     if (!this.audioContext) return null;
 
-    // Use focused frequencies for crisp wood contact
-    const frequency = Math.max(120, Math.min(800, baseFrequency));
+    // Use warmer, lower frequencies for wood contact
+    const frequency = Math.max(80, Math.min(600, baseFrequency)); // Lowered range
 
     const sampleRate = this.audioContext.sampleRate;
     const length = sampleRate * duration;
@@ -72,32 +72,34 @@ export class SoundManager {
     const leftGain = stereoPosition <= 0 ? 1 : 1 - stereoPosition;
     const rightGain = stereoPosition >= 0 ? 1 : 1 + stereoPosition;
 
-    // Generate dry, crisp wood contact sound
+    // Generate dry, crisp wood contact sound with warmer tone
     for (let i = 0; i < length; i++) {
       const t = i / sampleRate;
       
-      // Very sharp attack with rapid decay for dryness
+      // Sharp attack with rapid decay for dryness
       const envelope = Math.exp(-t * 35) * (1 - Math.exp(-t * 100));
       
-      // Main contact frequency - clean and focused
+      // Main contact frequency - warmer and fuller
       const fundamental = Math.sin(2 * Math.PI * frequency * t);
       
-      // Sharp click component for initial contact
-      const clickComponent = Math.sin(2 * Math.PI * frequency * 2.5 * t) * 0.4 * Math.exp(-t * 50);
+      // Sharp click component for initial contact - warmer
+      const clickComponent = Math.sin(2 * Math.PI * frequency * 2.2 * t) * 0.5 * Math.exp(-t * 50);
       
-      // Minimal harmonics for cleaner sound
-      const harmonic = Math.sin(2 * Math.PI * frequency * 1.5 * t) * 0.2 * Math.exp(-t * 30);
+      // Warmer harmonics for richer sound
+      const harmonic = Math.sin(2 * Math.PI * frequency * 1.3 * t) * 0.3 * Math.exp(-t * 30);
+      const subHarmonic = Math.sin(2 * Math.PI * frequency * 0.7 * t) * 0.2 * Math.exp(-t * 25);
       
       // Very minimal texture - just a hint of wood grain
       const dryTexture = (Math.random() - 0.5) * 0.03 * Math.exp(-t * 40);
       
-      // Combine components with emphasis on fundamental and click
+      // Combine components with emphasis on fundamental and warmer tones
       const sample = (
-        fundamental * 0.7 + 
+        fundamental * 0.8 + 
         clickComponent + 
         harmonic + 
+        subHarmonic +
         dryTexture
-      ) * envelope * intensity * 0.5;
+      ) * envelope * intensity * 0.7; // Increased from 0.5
       
       // Apply stereo positioning
       leftData[i] = sample * leftGain;
@@ -107,11 +109,11 @@ export class SoundManager {
     return buffer;
   }
 
-  // Generate dry transition sound - shorter and more direct
+  // Generate dry transition sound with warmer frequencies
   private generateDryTransitionSound(
-    startFreq: number = 200,
-    endFreq: number = 300,
-    duration: number = 0.15 // Much shorter
+    startFreq: number = 150, // Lowered from 200
+    endFreq: number = 220,   // Lowered from 300
+    duration: number = 0.15
   ): AudioBuffer | null {
     if (!this.audioContext) return null;
 
@@ -131,11 +133,12 @@ export class SoundManager {
       // Sharp envelope - quick in and out
       const envelope = Math.sin(Math.PI * progress) * Math.exp(-t * 8);
       
-      // Clean tone with minimal harmonics
+      // Clean tone with warmer harmonics
       const fundamental = Math.sin(2 * Math.PI * frequency * t);
-      const harmonic = Math.sin(2 * Math.PI * frequency * 1.3 * t) * 0.2;
+      const harmonic = Math.sin(2 * Math.PI * frequency * 1.2 * t) * 0.3;
+      const subHarmonic = Math.sin(2 * Math.PI * frequency * 0.8 * t) * 0.2;
       
-      const sample = (fundamental + harmonic) * envelope * 0.4;
+      const sample = (fundamental + harmonic + subHarmonic) * envelope * 0.5; // Increased from 0.4
       
       leftData[i] = sample;
       rightData[i] = sample;
@@ -161,8 +164,8 @@ export class SoundManager {
     gainNode.connect(pannerNode);
     pannerNode.connect(this.audioContext.destination);
     
-    // Apply volume normalization
-    const normalizedVolume = this.masterVolume * this.sfxVolume * volume;
+    // Apply volume normalization - increased overall
+    const normalizedVolume = this.masterVolume * this.sfxVolume * volume * 1.2; // Added 1.2x multiplier
     gainNode.gain.setValueAtTime(normalizedVolume, this.audioContext.currentTime);
     
     // Apply stereo positioning
@@ -199,19 +202,19 @@ export class SoundManager {
 
     switch (type) {
       case 'draw':
-        baseFrequency = 220; // Crisp, higher for draw
-        duration = 0.06; // Very short and dry
-        intensity = 0.8;
+        baseFrequency = 160; // Lowered from 220
+        duration = 0.06;
+        intensity = 0.9; // Increased from 0.8
         break;
       case 'claim':
-        baseFrequency = 280; // Higher pitch for importance
-        duration = 0.1; // Slightly longer but still dry
-        intensity = 1.1;
+        baseFrequency = 200; // Lowered from 280
+        duration = 0.1;
+        intensity = 1.3; // Increased from 1.1
         break;
       default: // discard
-        baseFrequency = 250; // Clean, focused frequency
-        duration = 0.08; // Short and crisp
-        intensity = 1.0;
+        baseFrequency = 180; // Lowered from 250
+        duration = 0.08;
+        intensity = 1.1; // Increased from 1.0
     }
 
     const buffer = this.generateDryWoodSound(baseFrequency, duration, stereoPosition, intensity);
@@ -223,26 +226,26 @@ export class SoundManager {
   public playWinSound() {
     if (!this.audioContext || !this.isEnabled) return;
 
-    // Play a crisp ascending sequence - shorter and drier
-    const frequencies = [200, 250, 320, 400]; // Higher, cleaner frequencies
+    // Play a warmer ascending sequence
+    const frequencies = [140, 180, 220, 280]; // Lowered all frequencies
     
     frequencies.forEach((freq, index) => {
       setTimeout(() => {
-        const buffer = this.generateDryWoodSound(freq, 0.12, 0, 0.9); // Much shorter
+        const buffer = this.generateDryWoodSound(freq, 0.12, 0, 1.0); // Increased intensity
         if (buffer) {
-          this.playBuffer(buffer, 0.8);
+          this.playBuffer(buffer, 0.9); // Increased from 0.8
         }
-      }, index * 80); // Faster sequence
+      }, index * 80);
     });
   }
 
   public playErrorSound() {
     if (!this.audioContext || !this.isEnabled) return;
 
-    // Sharp, dry error sound
-    const buffer = this.generateDryWoodSound(150, 0.05, 0, 0.7); // Very short
+    // Warmer, dry error sound
+    const buffer = this.generateDryWoodSound(110, 0.05, 0, 0.8); // Lowered from 150
     if (buffer) {
-      this.playBuffer(buffer, 0.6);
+      this.playBuffer(buffer, 0.7); // Increased from 0.6
     }
   }
 
@@ -253,24 +256,24 @@ export class SoundManager {
 
     switch (type) {
       case 'game-start':
-        startFreq = 200;
-        endFreq = 350;
-        duration = 0.2; // Much shorter
+        startFreq = 150; // Lowered from 200
+        endFreq = 250;   // Lowered from 350
+        duration = 0.2;
         break;
       case 'round-end':
-        startFreq = 350;
-        endFreq = 200;
+        startFreq = 250; // Lowered from 350
+        endFreq = 150;   // Lowered from 200
         duration = 0.18;
         break;
       default: // turn-change
-        startFreq = 220;
-        endFreq = 280;
-        duration = 0.12; // Very short
+        startFreq = 160; // Lowered from 220
+        endFreq = 200;   // Lowered from 280
+        duration = 0.12;
     }
 
     const buffer = this.generateDryTransitionSound(startFreq, endFreq, duration);
     if (buffer) {
-      this.playBuffer(buffer, 0.7);
+      this.playBuffer(buffer, 0.8); // Increased from 0.7
     }
   }
 }
