@@ -57,10 +57,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     bestScore: 0
   });
 
-  // FIXED: Multiple refs to prevent race conditions
-  const botTurnInProgress = useRef(false);
+  // FIXED: Single processing flag to prevent all race conditions
+  const isProcessing = useRef(false);
   const gameStateRef = useRef<GameState | null>(null);
-  const processingAction = useRef(false);
   const soundManager = SoundManager.getInstance();
 
   // Keep gameStateRef in sync
@@ -116,9 +115,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setShowWinModal(false);
     setShowDrawModal(false);
     
-    // FIXED: Reset all flags
-    botTurnInProgress.current = false;
-    processingAction.current = false;
+    // FIXED: Reset processing flag
+    isProcessing.current = false;
     
     soundManager.playTransitionSound('game-start');
   }, []);
@@ -127,369 +125,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     initializeGame();
   }, [initializeGame]);
 
-  // FIXED: Completely rewritten bot AI with proper state management
-  const executeBotTurn = useCallback(() => {
-    // FIXED: Prevent multiple simultaneous executions
-    if (botTurnInProgress.current || processingAction.current) {
-      return;
-    }
-
-    const currentState = gameStateRef.current;
-    if (!currentState || currentState.gamePhase !== 'playing') {
-      return;
-    }
-
-    const currentPlayer = currentState.players[currentState.currentPlayer];
-    if (!currentPlayer.isBot) {
-      return;
-    }
-
-    // FIXED: Set both flags to prevent any race conditions
-    botTurnInProgress.current = true;
-    processingAction.current = true;
-
-    console.log(`Bot ${currentPlayer.name} starting turn with ${currentPlayer.hand.length} tiles`);
-
-    setTimeout(() => {
-      setGameState(prevState => {
-        // FIXED: Double-check state validity
-        if (!prevState || 
-            prevState.gamePhase !== 'playing' || 
-            !prevState.players[prevState.currentPlayer].isBot ||
-            !botTurnInProgress.current) {
-          botTurnInProgress.current = false;
-          processingAction.current = false;
-          return prevState;
-        }
-
-        const newState = { ...prevState };
-        const botPlayer = { ...newState.players[newState.currentPlayer] };
-        const botPlayerIndex = newState.currentPlayer;
-
-        console.log(`Processing bot turn for ${botPlayer.name}, hand size: ${botPlayer.hand.length}, lastActionWasClaim: ${newState.lastActionWasClaim}`);
-
-        // FIXED: Check win condition before any actions
-        if (isWinningHand(botPlayer.hand, botPlayer.exposedSets)) {
-          const analysis = analyzeWinningHand(botPlayer.hand, botPlayer.exposedSets);
-          const score = calculateWinScore(botPlayer.hand, botPlayer.exposedSets, 'self-drawn', botPlayer.isDealer);
-          
-          setBotAction({
-            type: 'win',
-            playerName: botPlayer.name,
-            tiles: analysis.allTiles
-          });
-
-          setWinDetails({
-            winner: botPlayer.name,
-            winType: 'self-drawn',
-            score,
-            analysis,
-            allPlayers: newState.players
-          });
-
-          newState.gamePhase = 'finished';
-          newState.winner = botPlayer.id;
-          newState.winType = 'self-drawn';
-          newState.winScore = score;
-
-          soundManager.playWinSound();
-          
-          setTimeout(() => {
-            setShowWinModal(true);
-            setBotAction(null);
-            botTurnInProgress.current = false;
-            processingAction.current = false;
-          }, 2000);
-
-          return newState;
-        }
-
-        // FIXED: Draw logic - only draw if hand has 13 tiles and not from claim
-        if (!newState.lastActionWasClaim && botPlayer.hand.length === 13) {
-          if (newState.wall.length === 0) {
-            // Handle draw condition
-            const drawCondition = checkDrawCondition(newState.wall.length, newState.turnNumber);
-            if (drawCondition) {
-              const finalScores = calculateDrawScores(newState.players);
-              setDrawDetails({
-                reason: drawCondition,
-                finalScores,
-                players: newState.players
-              });
-              newState.gamePhase = 'draw';
-              newState.drawReason = drawCondition;
-              newState.finalScores = finalScores;
-              
-              setTimeout(() => {
-                setShowDrawModal(true);
-                botTurnInProgress.current = false;
-                processingAction.current = false;
-              }, 1000);
-              
-              return newState;
-            }
-          }
-
-          // Draw a tile
-          const drawnTile = newState.wall[0];
-          botPlayer.hand = sortTiles([...botPlayer.hand, drawnTile]);
-          newState.wall = newState.wall.slice(1);
-          
-          console.log(`Bot ${botPlayer.name} drew tile, hand size now: ${botPlayer.hand.length}`);
-          
-          soundManager.playTileSound('draw', getPlayerPosition(botPlayer.id));
-
-          // Check win after drawing
-          if (isWinningHand(botPlayer.hand, botPlayer.exposedSets)) {
-            const analysis = analyzeWinningHand(botPlayer.hand, botPlayer.exposedSets);
-            const score = calculateWinScore(botPlayer.hand, botPlayer.exposedSets, 'self-drawn', botPlayer.isDealer);
-            
-            setBotAction({
-              type: 'win',
-              playerName: botPlayer.name,
-              tiles: analysis.allTiles
-            });
-
-            setWinDetails({
-              winner: botPlayer.name,
-              winType: 'self-drawn',
-              score,
-              analysis,
-              allPlayers: newState.players
-            });
-
-            newState.gamePhase = 'finished';
-            newState.winner = botPlayer.id;
-            newState.winType = 'self-drawn';
-            newState.winScore = score;
-
-            soundManager.playWinSound();
-            
-            setTimeout(() => {
-              setShowWinModal(true);
-              setBotAction(null);
-              botTurnInProgress.current = false;
-              processingAction.current = false;
-            }, 2000);
-
-            return newState;
-          }
-        }
-
-        // FIXED: Reset claim flag after processing
-        newState.lastActionWasClaim = false;
-
-        // FIXED: Validate hand size before discarding
-        if (botPlayer.hand.length !== 14) {
-          console.error(`Bot ${botPlayer.name} has invalid hand size for discard: ${botPlayer.hand.length}`);
-          botTurnInProgress.current = false;
-          processingAction.current = false;
-          return prevState;
-        }
-
-        // FIXED: Bot decision making for discarding
-        const winningTiles = isOneAwayFromWin(botPlayer.hand, botPlayer.exposedSets);
-        let tileToDiscard: Tile;
-
-        if (winningTiles.length > 0) {
-          // Bot is close to winning, discard carefully
-          const safeTiles = botPlayer.hand.filter(tile => 
-            !winningTiles.some(wt => 
-              wt.type === tile.type && 
-              wt.value === tile.value && 
-              wt.dragon === tile.dragon && 
-              wt.wind === tile.wind
-            )
-          );
-          tileToDiscard = safeTiles.length > 0 ? safeTiles[0] : botPlayer.hand[0];
-        } else {
-          // Random discard for now (could be improved with better AI)
-          tileToDiscard = botPlayer.hand[Math.floor(Math.random() * botPlayer.hand.length)];
-        }
-
-        // FIXED: Remove tile from bot's hand
-        botPlayer.hand = botPlayer.hand.filter(tile => tile.id !== tileToDiscard.id);
-        
-        console.log(`Bot ${botPlayer.name} discarding tile, hand size now: ${botPlayer.hand.length}`);
-        
-        // FIXED: Create discard entry
-        const discardedTile: DiscardedTile = {
-          tile: tileToDiscard,
-          playerId: botPlayer.id,
-          playerName: botPlayer.name,
-          turnNumber: newState.turnNumber
-        };
-        
-        // FIXED: Add to discard pile and update player
-        newState.discardPile = [...newState.discardPile, discardedTile];
-        newState.players[botPlayerIndex] = botPlayer;
-        
-        soundManager.playTileSound('discard', getPlayerPosition(botPlayer.id));
-
-        // FIXED: Check for claims by other players
-        const claimingPlayers = checkForClaims(newState, discardedTile);
-        
-        if (claimingPlayers.length > 0) {
-          // Handle claims (prioritize win > kong > pung > chow)
-          const winClaim = claimingPlayers.find(claim => claim.type === 'win');
-          if (winClaim) {
-            handleBotWinClaim(newState, winClaim, discardedTile);
-            return newState;
-          }
-
-          const kongClaim = claimingPlayers.find(claim => claim.type === 'kong');
-          if (kongClaim) {
-            handleBotClaim(newState, kongClaim, discardedTile);
-            return newState;
-          }
-
-          const pungClaim = claimingPlayers.find(claim => claim.type === 'pung');
-          if (pungClaim) {
-            handleBotClaim(newState, pungClaim, discardedTile);
-            return newState;
-          }
-
-          const chowClaim = claimingPlayers.find(claim => claim.type === 'chow');
-          if (chowClaim) {
-            handleBotClaim(newState, chowClaim, discardedTile);
-            return newState;
-          }
-        }
-
-        // FIXED: Move to next player and increment turn
-        newState.currentPlayer = (newState.currentPlayer + 1) % 4;
-        newState.turnNumber++;
-
-        // Check for draw conditions
-        const drawCondition = checkDrawCondition(newState.wall.length, newState.turnNumber);
-        if (drawCondition) {
-          const finalScores = calculateDrawScores(newState.players);
-          setDrawDetails({
-            reason: drawCondition,
-            finalScores,
-            players: newState.players
-          });
-          newState.gamePhase = 'draw';
-          newState.drawReason = drawCondition;
-          newState.finalScores = finalScores;
-          
-          setTimeout(() => {
-            setShowDrawModal(true);
-            botTurnInProgress.current = false;
-            processingAction.current = false;
-          }, 1000);
-        } else {
-          // FIXED: Reset flags after successful turn completion
-          botTurnInProgress.current = false;
-          processingAction.current = false;
-        }
-
-        soundManager.playTransitionSound('turn-change');
-        return newState;
-      });
-    }, 1000);
-  }, []);
-
-  // FIXED: Handle bot claims with proper state management
-  const handleBotClaim = (state: GameState, claim: any, discardedTile: DiscardedTile) => {
-    const claimingPlayerIndex = state.players.findIndex(p => p.id === claim.playerId);
-    if (claimingPlayerIndex === -1) return;
-
-    const claimingPlayer = { ...state.players[claimingPlayerIndex] };
-    
-    // FIXED: Remove the discarded tile from discard pile (prevent duplicate)
-    state.discardPile = state.discardPile.filter(d => d.tile.id !== discardedTile.tile.id);
-    
-    // Form the set
-    let claimedSet: Tile[];
-    if (claim.type === 'kong') {
-      const matchingTiles = canFormKong(claimingPlayer.hand, discardedTile.tile);
-      if (matchingTiles) {
-        claimedSet = [...matchingTiles, discardedTile.tile];
-        claimingPlayer.hand = claimingPlayer.hand.filter(tile => 
-          !matchingTiles.some(mt => mt.id === tile.id)
-        );
-      } else return;
-    } else if (claim.type === 'pung') {
-      const matchingTiles = canFormPung(claimingPlayer.hand, discardedTile.tile);
-      if (matchingTiles) {
-        claimedSet = [...matchingTiles, discardedTile.tile];
-        claimingPlayer.hand = claimingPlayer.hand.filter(tile => 
-          !matchingTiles.some(mt => mt.id === tile.id)
-        );
-      } else return;
-    } else if (claim.type === 'chow') {
-      claimedSet = [...claim.tiles, discardedTile.tile];
-      claimingPlayer.hand = claimingPlayer.hand.filter(tile => 
-        !claim.tiles.some(ct => ct.id === tile.id)
-      );
-    } else return;
-
-    // Add to exposed sets
-    claimingPlayer.exposedSets.push(claimedSet);
-    claimingPlayer.hand = sortTiles(claimingPlayer.hand);
-    
-    // FIXED: Update state properly
-    state.players[claimingPlayerIndex] = claimingPlayer;
-    state.currentPlayer = claimingPlayerIndex;
-    state.lastActionWasClaim = true;
-    
-    // Show bot action
-    setBotAction({
-      type: claim.type,
-      playerName: claimingPlayer.name,
-      tiles: claimedSet
-    });
-
-    soundManager.playTileSound('claim', getPlayerPosition(claimingPlayer.id));
-    
-    // FIXED: Reset flags after claim processing
-    setTimeout(() => {
-      setBotAction(null);
-      botTurnInProgress.current = false;
-      processingAction.current = false;
-    }, 1500);
-  };
-
-  // Handle bot win claims
-  const handleBotWinClaim = (state: GameState, claim: any, discardedTile: DiscardedTile) => {
-    const winningPlayerIndex = state.players.findIndex(p => p.id === claim.playerId);
-    if (winningPlayerIndex === -1) return;
-
-    const winningPlayer = state.players[winningPlayerIndex];
-    const testHand = [...winningPlayer.hand, discardedTile.tile];
-    
-    if (isWinningHand(testHand, winningPlayer.exposedSets)) {
-      const analysis = analyzeWinningHand(testHand, winningPlayer.exposedSets);
-      const score = calculateWinScore(testHand, winningPlayer.exposedSets, 'claimed', winningPlayer.isDealer);
-      
-      setBotAction({
-        type: 'win',
-        playerName: winningPlayer.name,
-        tiles: analysis.allTiles
-      });
-
-      setWinDetails({
-        winner: winningPlayer.name,
-        winType: 'claimed',
-        score,
-        analysis,
-        allPlayers: state.players
-      });
-
-      state.gamePhase = 'finished';
-      state.winner = winningPlayer.id;
-      state.winType = 'claimed';
-      state.winScore = score;
-
-      soundManager.playWinSound();
-      
-      setTimeout(() => {
-        setShowWinModal(true);
-        setBotAction(null);
-        botTurnInProgress.current = false;
-        processingAction.current = false;
-      }, 2000);
+  // Get player position for sound positioning
+  const getPlayerPosition = (playerId: string): 'center' | 'left' | 'right' | 'top' | 'bottom' => {
+    switch (playerId) {
+      case 'player1': return 'bottom';
+      case 'bot1': return 'right';
+      case 'bot2': return 'top';
+      case 'bot3': return 'left';
+      default: return 'center';
     }
   };
 
@@ -530,40 +173,394 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     return claims;
   };
 
-  // Get player position for sound positioning
-  const getPlayerPosition = (playerId: string): 'center' | 'left' | 'right' | 'top' | 'bottom' => {
-    switch (playerId) {
-      case 'player1': return 'bottom';
-      case 'bot1': return 'right';
-      case 'bot2': return 'top';
-      case 'bot3': return 'left';
-      default: return 'center';
+  // FIXED: Handle bot claims with proper state management
+  const handleBotClaim = (state: GameState, claim: any, discardedTile: DiscardedTile) => {
+    const claimingPlayerIndex = state.players.findIndex(p => p.id === claim.playerId);
+    if (claimingPlayerIndex === -1) return;
+
+    const claimingPlayer = { ...state.players[claimingPlayerIndex] };
+    
+    // Remove the discarded tile from discard pile
+    state.discardPile = state.discardPile.filter(d => d.tile.id !== discardedTile.tile.id);
+    
+    // Form the set
+    let claimedSet: Tile[];
+    if (claim.type === 'kong') {
+      const matchingTiles = canFormKong(claimingPlayer.hand, discardedTile.tile);
+      if (matchingTiles) {
+        claimedSet = [...matchingTiles, discardedTile.tile];
+        claimingPlayer.hand = claimingPlayer.hand.filter(tile => 
+          !matchingTiles.some(mt => mt.id === tile.id)
+        );
+      } else return;
+    } else if (claim.type === 'pung') {
+      const matchingTiles = canFormPung(claimingPlayer.hand, discardedTile.tile);
+      if (matchingTiles) {
+        claimedSet = [...matchingTiles, discardedTile.tile];
+        claimingPlayer.hand = claimingPlayer.hand.filter(tile => 
+          !matchingTiles.some(mt => mt.id === tile.id)
+        );
+      } else return;
+    } else if (claim.type === 'chow') {
+      claimedSet = [...claim.tiles, discardedTile.tile];
+      claimingPlayer.hand = claimingPlayer.hand.filter(tile => 
+        !claim.tiles.some(ct => ct.id === tile.id)
+      );
+    } else return;
+
+    // Add to exposed sets
+    claimingPlayer.exposedSets.push(claimedSet);
+    claimingPlayer.hand = sortTiles(claimingPlayer.hand);
+    
+    // Update state properly
+    state.players[claimingPlayerIndex] = claimingPlayer;
+    state.currentPlayer = claimingPlayerIndex;
+    state.lastActionWasClaim = true;
+    
+    // Show bot action
+    setBotAction({
+      type: claim.type,
+      playerName: claimingPlayer.name,
+      tiles: claimedSet
+    });
+
+    soundManager.playTileSound('claim', getPlayerPosition(claimingPlayer.id));
+    
+    // Clear bot action after delay
+    setTimeout(() => {
+      setBotAction(null);
+    }, 1500);
+  };
+
+  // Handle bot win claims
+  const handleBotWinClaim = (state: GameState, claim: any, discardedTile: DiscardedTile) => {
+    const winningPlayerIndex = state.players.findIndex(p => p.id === claim.playerId);
+    if (winningPlayerIndex === -1) return;
+
+    const winningPlayer = state.players[winningPlayerIndex];
+    const testHand = [...winningPlayer.hand, discardedTile.tile];
+    
+    if (isWinningHand(testHand, winningPlayer.exposedSets)) {
+      const analysis = analyzeWinningHand(testHand, winningPlayer.exposedSets);
+      const score = calculateWinScore(testHand, winningPlayer.exposedSets, 'claimed', winningPlayer.isDealer);
+      
+      setBotAction({
+        type: 'win',
+        playerName: winningPlayer.name,
+        tiles: analysis.allTiles
+      });
+
+      setWinDetails({
+        winner: winningPlayer.name,
+        winType: 'claimed',
+        score,
+        analysis,
+        allPlayers: state.players
+      });
+
+      state.gamePhase = 'finished';
+      state.winner = winningPlayer.id;
+      state.winType = 'claimed';
+      state.winScore = score;
+
+      soundManager.playWinSound();
+      
+      setTimeout(() => {
+        setShowWinModal(true);
+        setBotAction(null);
+      }, 2000);
     }
   };
 
-  // FIXED: Execute bot turns with proper state checking and single trigger
-  useEffect(() => {
-    if (gameState && 
-        gameState.gamePhase === 'playing' && 
-        !botTurnInProgress.current && 
-        !processingAction.current) {
-      const currentPlayer = gameState.players[gameState.currentPlayer];
-      if (currentPlayer.isBot) {
-        console.log(`Triggering bot turn for ${currentPlayer.name}`);
-        executeBotTurn();
-      }
+  // FIXED: Completely rewritten bot turn execution with proper async handling
+  const executeBotTurn = useCallback(async () => {
+    // Prevent multiple simultaneous executions
+    if (isProcessing.current) {
+      console.log('Bot turn already in progress, skipping');
+      return;
     }
-  }, [gameState?.currentPlayer, gameState?.gamePhase]);
+
+    const currentState = gameStateRef.current;
+    if (!currentState || currentState.gamePhase !== 'playing') {
+      console.log('Invalid game state for bot turn');
+      return;
+    }
+
+    const currentPlayer = currentState.players[currentState.currentPlayer];
+    if (!currentPlayer.isBot) {
+      console.log('Current player is not a bot');
+      return;
+    }
+
+    // Set processing flag
+    isProcessing.current = true;
+    console.log(`🤖 Bot ${currentPlayer.name} starting turn with ${currentPlayer.hand.length} tiles`);
+
+    // Add delay for better UX
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Process bot turn
+    setGameState(prevState => {
+      // Double-check state validity
+      if (!prevState || 
+          prevState.gamePhase !== 'playing' || 
+          !prevState.players[prevState.currentPlayer].isBot) {
+        console.log('State changed during bot turn, aborting');
+        isProcessing.current = false;
+        return prevState;
+      }
+
+      const newState = { ...prevState };
+      const botPlayer = { ...newState.players[newState.currentPlayer] };
+      const botPlayerIndex = newState.currentPlayer;
+
+      console.log(`Processing bot ${botPlayer.name}: hand=${botPlayer.hand.length}, lastClaim=${newState.lastActionWasClaim}`);
+
+      // Check win condition first
+      if (isWinningHand(botPlayer.hand, botPlayer.exposedSets)) {
+        console.log(`🏆 Bot ${botPlayer.name} wins with current hand!`);
+        const analysis = analyzeWinningHand(botPlayer.hand, botPlayer.exposedSets);
+        const score = calculateWinScore(botPlayer.hand, botPlayer.exposedSets, 'self-drawn', botPlayer.isDealer);
+        
+        setBotAction({
+          type: 'win',
+          playerName: botPlayer.name,
+          tiles: analysis.allTiles
+        });
+
+        setWinDetails({
+          winner: botPlayer.name,
+          winType: 'self-drawn',
+          score,
+          analysis,
+          allPlayers: newState.players
+        });
+
+        newState.gamePhase = 'finished';
+        newState.winner = botPlayer.id;
+        newState.winType = 'self-drawn';
+        newState.winScore = score;
+
+        soundManager.playWinSound();
+        
+        setTimeout(() => {
+          setShowWinModal(true);
+          setBotAction(null);
+          isProcessing.current = false;
+        }, 2000);
+
+        return newState;
+      }
+
+      // Draw tile if needed (13 tiles and not from claim)
+      if (!newState.lastActionWasClaim && botPlayer.hand.length === 13) {
+        if (newState.wall.length === 0) {
+          console.log('Wall exhausted, ending game');
+          const drawCondition = checkDrawCondition(newState.wall.length, newState.turnNumber);
+          if (drawCondition) {
+            const finalScores = calculateDrawScores(newState.players);
+            setDrawDetails({
+              reason: drawCondition,
+              finalScores,
+              players: newState.players
+            });
+            newState.gamePhase = 'draw';
+            newState.drawReason = drawCondition;
+            newState.finalScores = finalScores;
+            
+            setTimeout(() => {
+              setShowDrawModal(true);
+              isProcessing.current = false;
+            }, 1000);
+            
+            return newState;
+          }
+        }
+
+        // Draw a tile
+        const drawnTile = newState.wall[0];
+        botPlayer.hand = sortTiles([...botPlayer.hand, drawnTile]);
+        newState.wall = newState.wall.slice(1);
+        
+        console.log(`🎯 Bot ${botPlayer.name} drew tile, hand size: ${botPlayer.hand.length}`);
+        soundManager.playTileSound('draw', getPlayerPosition(botPlayer.id));
+
+        // Check win after drawing
+        if (isWinningHand(botPlayer.hand, botPlayer.exposedSets)) {
+          console.log(`🏆 Bot ${botPlayer.name} wins after drawing!`);
+          const analysis = analyzeWinningHand(botPlayer.hand, botPlayer.exposedSets);
+          const score = calculateWinScore(botPlayer.hand, botPlayer.exposedSets, 'self-drawn', botPlayer.isDealer);
+          
+          setBotAction({
+            type: 'win',
+            playerName: botPlayer.name,
+            tiles: analysis.allTiles
+          });
+
+          setWinDetails({
+            winner: botPlayer.name,
+            winType: 'self-drawn',
+            score,
+            analysis,
+            allPlayers: newState.players
+          });
+
+          newState.gamePhase = 'finished';
+          newState.winner = botPlayer.id;
+          newState.winType = 'self-drawn';
+          newState.winScore = score;
+
+          soundManager.playWinSound();
+          
+          setTimeout(() => {
+            setShowWinModal(true);
+            setBotAction(null);
+            isProcessing.current = false;
+          }, 2000);
+
+          return newState;
+        }
+      }
+
+      // Reset claim flag
+      newState.lastActionWasClaim = false;
+
+      // Validate hand size for discarding
+      if (botPlayer.hand.length !== 14) {
+        console.error(`❌ Bot ${botPlayer.name} has invalid hand size: ${botPlayer.hand.length}`);
+        isProcessing.current = false;
+        return prevState;
+      }
+
+      // Bot AI: Choose tile to discard
+      const winningTiles = isOneAwayFromWin(botPlayer.hand, botPlayer.exposedSets);
+      let tileToDiscard: Tile;
+
+      if (winningTiles.length > 0) {
+        // Bot is close to winning, discard carefully
+        const safeTiles = botPlayer.hand.filter(tile => 
+          !winningTiles.some(wt => 
+            wt.type === tile.type && 
+            wt.value === tile.value && 
+            wt.dragon === tile.dragon && 
+            wt.wind === tile.wind
+          )
+        );
+        tileToDiscard = safeTiles.length > 0 ? safeTiles[0] : botPlayer.hand[0];
+      } else {
+        // Random discard
+        tileToDiscard = botPlayer.hand[Math.floor(Math.random() * botPlayer.hand.length)];
+      }
+
+      // Remove tile from bot's hand
+      botPlayer.hand = botPlayer.hand.filter(tile => tile.id !== tileToDiscard.id);
+      
+      console.log(`🗑️ Bot ${botPlayer.name} discarding, hand size: ${botPlayer.hand.length}`);
+      
+      // Create discard entry
+      const discardedTile: DiscardedTile = {
+        tile: tileToDiscard,
+        playerId: botPlayer.id,
+        playerName: botPlayer.name,
+        turnNumber: newState.turnNumber
+      };
+      
+      // Add to discard pile and update player
+      newState.discardPile = [...newState.discardPile, discardedTile];
+      newState.players[botPlayerIndex] = botPlayer;
+      
+      soundManager.playTileSound('discard', getPlayerPosition(botPlayer.id));
+
+      // Check for claims by other players
+      const claimingPlayers = checkForClaims(newState, discardedTile);
+      
+      if (claimingPlayers.length > 0) {
+        console.log(`🎯 Found ${claimingPlayers.length} possible claims`);
+        
+        // Handle claims (prioritize win > kong > pung > chow)
+        const winClaim = claimingPlayers.find(claim => claim.type === 'win');
+        if (winClaim) {
+          handleBotWinClaim(newState, winClaim, discardedTile);
+          isProcessing.current = false;
+          return newState;
+        }
+
+        const kongClaim = claimingPlayers.find(claim => claim.type === 'kong');
+        if (kongClaim) {
+          handleBotClaim(newState, kongClaim, discardedTile);
+          isProcessing.current = false;
+          return newState;
+        }
+
+        const pungClaim = claimingPlayers.find(claim => claim.type === 'pung');
+        if (pungClaim) {
+          handleBotClaim(newState, pungClaim, discardedTile);
+          isProcessing.current = false;
+          return newState;
+        }
+
+        const chowClaim = claimingPlayers.find(claim => claim.type === 'chow');
+        if (chowClaim) {
+          handleBotClaim(newState, chowClaim, discardedTile);
+          isProcessing.current = false;
+          return newState;
+        }
+      }
+
+      // Move to next player and increment turn
+      newState.currentPlayer = (newState.currentPlayer + 1) % 4;
+      newState.turnNumber++;
+
+      console.log(`➡️ Moving to next player: ${newState.players[newState.currentPlayer].name}`);
+
+      // Check for draw conditions
+      const drawCondition = checkDrawCondition(newState.wall.length, newState.turnNumber);
+      if (drawCondition) {
+        const finalScores = calculateDrawScores(newState.players);
+        setDrawDetails({
+          reason: drawCondition,
+          finalScores,
+          players: newState.players
+        });
+        newState.gamePhase = 'draw';
+        newState.drawReason = drawCondition;
+        newState.finalScores = finalScores;
+        
+        setTimeout(() => {
+          setShowDrawModal(true);
+          isProcessing.current = false;
+        }, 1000);
+      } else {
+        // Reset processing flag after successful turn
+        isProcessing.current = false;
+      }
+
+      soundManager.playTransitionSound('turn-change');
+      return newState;
+    });
+  }, []);
+
+  // FIXED: Trigger bot turns with proper state checking
+  useEffect(() => {
+    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current) {
+      return;
+    }
+
+    const currentPlayer = gameState.players[gameState.currentPlayer];
+    if (currentPlayer.isBot) {
+      console.log(`🎮 Triggering bot turn for ${currentPlayer.name}`);
+      executeBotTurn();
+    }
+  }, [gameState?.currentPlayer, gameState?.gamePhase, executeBotTurn]);
 
   // Handle player tile selection and discard
   const handleTileClick = (tile: Tile) => {
-    if (!gameState || gameState.gamePhase !== 'playing' || processingAction.current) return;
+    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current) return;
     
     const currentPlayer = gameState.players[gameState.currentPlayer];
     if (currentPlayer.isBot) return;
 
     if (selectedTile?.id === tile.id) {
-      // Deselect if clicking the same tile
       setSelectedTile(null);
     } else {
       setSelectedTile(tile);
@@ -572,32 +569,26 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   // FIXED: Handle player discard with proper state management
   const handleDiscard = () => {
-    if (!gameState || !selectedTile || gameState.gamePhase !== 'playing' || processingAction.current) return;
+    if (!gameState || !selectedTile || gameState.gamePhase !== 'playing' || isProcessing.current) return;
     
     const currentPlayer = gameState.players[gameState.currentPlayer];
-    if (currentPlayer.isBot) return;
+    if (currentPlayer.isBot || currentPlayer.hand.length !== 14) return;
 
-    // FIXED: Player must have 14 tiles to discard
-    if (currentPlayer.hand.length !== 14) {
-      console.error('Player hand size error:', currentPlayer.hand.length);
-      return;
-    }
-
-    processingAction.current = true;
+    isProcessing.current = true;
 
     setGameState(prevState => {
       if (!prevState) {
-        processingAction.current = false;
+        isProcessing.current = false;
         return prevState;
       }
       
       const newState = { ...prevState };
-      const player = { ...newState.players[0] }; // Player is always index 0
+      const player = { ...newState.players[0] };
       
       // Remove selected tile from hand
       player.hand = player.hand.filter(tile => tile.id !== selectedTile.id);
       
-      // FIXED: Create discard entry
+      // Create discard entry
       const discardedTile: DiscardedTile = {
         tile: selectedTile,
         playerId: player.id,
@@ -605,7 +596,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         turnNumber: newState.turnNumber
       };
       
-      // FIXED: Add to discard pile and update player
+      // Add to discard pile and update player
       newState.discardPile = [...newState.discardPile, discardedTile];
       newState.players[0] = player;
       
@@ -615,12 +606,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       const claimingPlayers = checkForClaims(newState, discardedTile);
       
       if (claimingPlayers.length > 0) {
-        // Handle claims (prioritize win > kong > pung > chow)
         const winClaim = claimingPlayers.find(claim => claim.type === 'win');
         if (winClaim) {
           handleBotWinClaim(newState, winClaim, discardedTile);
           setSelectedTile(null);
-          processingAction.current = false;
+          isProcessing.current = false;
           return newState;
         }
 
@@ -628,7 +618,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         if (kongClaim) {
           handleBotClaim(newState, kongClaim, discardedTile);
           setSelectedTile(null);
-          processingAction.current = false;
+          isProcessing.current = false;
           return newState;
         }
 
@@ -636,7 +626,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         if (pungClaim) {
           handleBotClaim(newState, pungClaim, discardedTile);
           setSelectedTile(null);
-          processingAction.current = false;
+          isProcessing.current = false;
           return newState;
         }
 
@@ -644,7 +634,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         if (chowClaim) {
           handleBotClaim(newState, chowClaim, discardedTile);
           setSelectedTile(null);
-          processingAction.current = false;
+          isProcessing.current = false;
           return newState;
         }
       }
@@ -669,10 +659,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         
         setTimeout(() => {
           setShowDrawModal(true);
-          processingAction.current = false;
+          isProcessing.current = false;
         }, 1000);
       } else {
-        processingAction.current = false;
+        isProcessing.current = false;
       }
 
       setSelectedTile(null);
@@ -683,19 +673,17 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
   // FIXED: Handle player draw with proper state management
   const handleDraw = () => {
-    if (!gameState || gameState.gamePhase !== 'playing' || processingAction.current) return;
+    if (!gameState || gameState.gamePhase !== 'playing' || isProcessing.current) return;
     
     const currentPlayer = gameState.players[gameState.currentPlayer];
     if (currentPlayer.isBot || gameState.wall.length === 0) return;
-
-    // FIXED: Only draw if player has 13 tiles and it's not after a claim
     if (currentPlayer.hand.length !== 13 || gameState.lastActionWasClaim) return;
 
-    processingAction.current = true;
+    isProcessing.current = true;
 
     setGameState(prevState => {
       if (!prevState) {
-        processingAction.current = false;
+        isProcessing.current = false;
         return prevState;
       }
       
@@ -731,10 +719,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         soundManager.playWinSound();
         setTimeout(() => {
           setShowWinModal(true);
-          processingAction.current = false;
+          isProcessing.current = false;
         }, 500);
       } else {
-        processingAction.current = false;
+        isProcessing.current = false;
       }
 
       return newState;
@@ -753,9 +741,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const humanPlayer = gameState.players[0];
   const isPlayerTurn = gameState.currentPlayer === 0 && !currentPlayer.isBot;
   
-  // FIXED: Proper draw/discard conditions
-  const canDraw = isPlayerTurn && gameState.wall.length > 0 && !gameState.lastActionWasClaim && humanPlayer.hand.length === 13 && !processingAction.current;
-  const canDiscard = isPlayerTurn && selectedTile !== null && humanPlayer.hand.length === 14 && !processingAction.current;
+  // Proper draw/discard conditions
+  const canDraw = isPlayerTurn && gameState.wall.length > 0 && !gameState.lastActionWasClaim && humanPlayer.hand.length === 13 && !isProcessing.current;
+  const canDiscard = isPlayerTurn && selectedTile !== null && humanPlayer.hand.length === 14 && !isProcessing.current;
 
   return (
     <div className="min-h-screen p-4 relative">
@@ -784,6 +772,16 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           </div>
         </div>
       </div>
+
+      {/* Processing Indicator */}
+      {isProcessing.current && (
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-black/50 backdrop-blur-sm rounded-lg p-4">
+          <div className="text-white text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
+            <p>Processing...</p>
+          </div>
+        </div>
+      )}
 
       {/* Main Game Area */}
       <div className="max-w-7xl mx-auto">
