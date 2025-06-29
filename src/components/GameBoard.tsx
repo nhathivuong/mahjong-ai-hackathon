@@ -87,33 +87,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   };
 
-  // Validate hand sizes (non-throwing version)
-  const validateHandSizes = (state: GameState): boolean => {
-    try {
-      for (let i = 0; i < state.players.length; i++) {
-        const player = state.players[i];
-        const isCurrentPlayer = i === state.currentPlayer;
-        const actualHandSize = player.hand.length;
-        const exposedTileCount = player.exposedSets.reduce((total, set) => total + set.length, 0);
-        const totalTiles = actualHandSize + exposedTileCount;
-        
-        // Expected total tiles
-        const expectedTotal = isCurrentPlayer ? 14 : 13;
-        
-        // Allow some flexibility in validation (±2 tiles to account for game state transitions)
-        if (totalTiles < expectedTotal - 2 || totalTiles > expectedTotal + 2) {
-          console.warn(`⚠️ ${player.name} has unusual tile count: ${totalTiles} (expected ~${expectedTotal})`);
-          console.warn(`   Hand: ${actualHandSize}, Exposed: ${exposedTileCount}`);
-          // Don't return false - just log the warning and continue
-        }
-      }
-      return true;
-    } catch (error) {
-      console.error('Error in hand size validation:', error);
-      return true; // Continue game even if validation fails
-    }
-  };
-
   // Handle tile selection
   const handleTileSelect = (tile: Tile) => {
     if (gameState.currentPlayer !== 0 || gameState.gamePhase !== 'playing') return;
@@ -145,7 +118,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     };
     newState.discardPile = [...gameState.discardPile, discardedTile];
     
-    // Check if any other player can claim this tile
+    // Check if any other player can claim this tile (only human player for now)
     const claimingOptions = checkClaimOptions(newState, tile, 0);
     
     if (claimingOptions.canClaim) {
@@ -170,37 +143,35 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     soundManager.playTileSound('discard', 'bottom');
   };
 
-  // Check claim options for all players
+  // Check claim options for human player only (to prevent auto-claiming)
   const checkClaimOptions = (state: GameState, discardedTile: Tile, discardingPlayer: number) => {
     let canClaim = false;
     let chow: Tile[][] = [];
     let pung: Tile[] | null = null;
     let kong: Tile[] | null = null;
 
-    // Check each player (except the discarding player)
-    for (let i = 0; i < state.players.length; i++) {
-      if (i === discardingPlayer) continue;
-      
-      const player = state.players[i];
+    // Only check for human player (player 0) claims
+    if (discardingPlayer !== 0) {
+      const humanPlayer = state.players[0];
       
       // Check for kong (highest priority)
-      const kongTiles = canFormKong(player.hand, discardedTile);
-      if (kongTiles && !kong) {
+      const kongTiles = canFormKong(humanPlayer.hand, discardedTile);
+      if (kongTiles) {
         kong = kongTiles;
         canClaim = true;
       }
       
       // Check for pung
-      const pungTiles = canFormPung(player.hand, discardedTile);
-      if (pungTiles && !pung) {
+      const pungTiles = canFormPung(humanPlayer.hand, discardedTile);
+      if (pungTiles) {
         pung = pungTiles;
         canClaim = true;
       }
       
       // Check for chow (only from previous player)
       const prevPlayer = (discardingPlayer + 3) % 4;
-      if (i === prevPlayer) {
-        const chowTiles = canFormChow(player.hand, discardedTile);
+      if (0 === prevPlayer) {
+        const chowTiles = canFormChow(humanPlayer.hand, discardedTile);
         if (chowTiles.length > 0) {
           chow = chowTiles;
           canClaim = true;
@@ -218,30 +189,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     const newState = { ...gameState };
     newState.players = gameState.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets.map(set => [...set])] }));
     
-    // Find the claiming player
-    let claimingPlayer = -1;
-    
-    if (action === 'chow') {
-      // Chow can only be claimed by the next player
-      claimingPlayer = (claimOptions.discardingPlayer + 1) % 4;
-    } else {
-      // Pung and Kong can be claimed by any player
-      for (let i = 0; i < newState.players.length; i++) {
-        if (i === claimOptions.discardingPlayer) continue;
-        
-        const player = newState.players[i];
-        if (action === 'pung' && canFormPung(player.hand, claimOptions.discardedTile)) {
-          claimingPlayer = i;
-          break;
-        } else if (action === 'kong' && canFormKong(player.hand, claimOptions.discardedTile)) {
-          claimingPlayer = i;
-          break;
-        }
-      }
-    }
-    
-    if (claimingPlayer === -1) return;
-    
+    // Human player is claiming
+    const claimingPlayer = 0;
     const player = newState.players[claimingPlayer];
     
     // Remove tiles from player's hand and create exposed set
@@ -334,9 +283,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     try {
       const currentPlayer = state.players[state.currentPlayer];
       
-      // Validate hand sizes (non-throwing)
-      validateHandSizes(state);
-      
       let newState = { ...state };
       
       // If player doesn't have enough tiles and it's not due to claims, draw a tile
@@ -368,7 +314,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         return newState;
       }
       
-      // Simple bot AI: discard a random tile
+      // Simple bot AI: discard a random tile (no auto-claiming)
       if (player.hand.length > 0) {
         const randomIndex = Math.floor(Math.random() * player.hand.length);
         const tileToDiscard = player.hand[randomIndex];
@@ -386,10 +332,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         };
         newState.discardPile = [...newState.discardPile, discardedTile];
         
-        // Check if human player can claim
+        // Check if human player can claim (only human player)
         const claimingOptions = checkClaimOptions(newState, tileToDiscard, newState.currentPlayer);
         
-        if (claimingOptions.canClaim && newState.currentPlayer !== 0) {
+        if (claimingOptions.canClaim) {
           setClaimOptions({
             chow: claimingOptions.chow,
             pung: claimingOptions.pung,
@@ -414,7 +360,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       return newState;
     } catch (error) {
       console.error('Error in bot turn execution:', error);
-      // Return current state if error occurs
       return state;
     }
   }, [soundManager]);
@@ -578,169 +523,60 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         </div>
 
         {/* Main Game Layout */}
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Game Board - Takes up 3 columns */}
-          <div className="xl:col-span-3">
-            <div className="relative w-full aspect-square max-w-4xl mx-auto bg-emerald-800/30 rounded-2xl border border-emerald-600/30 overflow-hidden">
-              
-              {/* Bottom Player (Human) */}
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-full max-w-3xl px-4">
-                <div className="text-center mb-3">
-                  <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
-                    gameState.currentPlayer === 0 
-                      ? 'bg-amber-500 text-white shadow-lg' 
-                      : 'bg-white/20 text-white'
-                  }`}>
-                    <span className="mr-2">{humanPlayer.name}</span>
-                    {gameState.currentPlayer === 0 && <span className="animate-pulse">●</span>}
-                  </div>
-                  <div className="text-xs text-emerald-200 mt-1">
-                    Hand: {humanPlayer.hand.length} | Sets: {humanPlayer.exposedSets.length}
-                  </div>
+          <div className="lg:col-span-3">
+            {/* Top Player (Bot 2) */}
+            <div className="mb-6">
+              <div className="text-center mb-3">
+                <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
+                  gameState.currentPlayer === 2 
+                    ? 'bg-amber-500 text-white shadow-lg' 
+                    : 'bg-white/20 text-white'
+                }`}>
+                  <span className="mr-2">{gameState.players[2].name}</span>
+                  {gameState.currentPlayer === 2 && <span className="animate-pulse">●</span>}
                 </div>
-
-                {/* Exposed Sets */}
-                {humanPlayer.exposedSets.length > 0 && (
-                  <div className="mb-3 flex justify-center">
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {humanPlayer.exposedSets.map((set, setIndex) => (
-                        <div key={setIndex} className="flex gap-1 bg-white/10 rounded-lg p-2">
-                          {set.map((tile, tileIndex) => (
-                            <TileComponent
-                              key={`${tile.id}-${tileIndex}`}
-                              tile={tile}
-                              height="compact"
-                              className="opacity-90"
-                            />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Human Player Hand */}
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {humanPlayer.hand.map((tile) => (
-                    <TileComponent
-                      key={tile.id}
-                      tile={tile}
-                      isSelected={selectedTile?.id === tile.id}
-                      onClick={() => handleTileSelect(tile)}
-                      className="hover:scale-105 transition-transform cursor-pointer"
-                    />
-                  ))}
-                </div>
-
-                {/* Discard Button */}
-                {gameState.currentPlayer === 0 && selectedTile && (
-                  <div className="mt-4 text-center">
-                    <button
-                      onClick={() => handleDiscard(selectedTile)}
-                      className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium"
-                    >
-                      Discard Selected Tile
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Right Player (Bot 1) */}
-              <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                <div className="text-center mb-3">
-                  <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
-                    gameState.currentPlayer === 1 
-                      ? 'bg-amber-500 text-white shadow-lg' 
-                      : 'bg-white/20 text-white'
-                  }`}>
-                    <span className="mr-2">{gameState.players[1].name}</span>
-                    {gameState.currentPlayer === 1 && <span className="animate-pulse">●</span>}
-                  </div>
-                  <div className="text-xs text-emerald-200 mt-1">
-                    Hand: {gameState.players[1].hand.length} | Sets: {gameState.players[1].exposedSets.length}
-                  </div>
-                </div>
-
-                {/* Exposed Sets */}
-                {gameState.players[1].exposedSets.length > 0 && (
-                  <div className="mb-3">
-                    <div className="flex flex-col gap-1">
-                      {gameState.players[1].exposedSets.map((set, setIndex) => (
-                        <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
-                          {set.map((tile, tileIndex) => (
-                            <TileComponent
-                              key={`${tile.id}-${tileIndex}`}
-                              tile={tile}
-                              height="compact"
-                              className="opacity-90"
-                            />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Bot Hand (Hidden) */}
-                <div className="flex flex-col gap-1">
-                  {Array.from({ length: gameState.players[1].hand.length }).map((_, index) => (
-                    <div
-                      key={index}
-                      className="w-8 h-12 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
-                    />
-                  ))}
+                <div className="text-xs text-emerald-200 mt-1">
+                  Hand: {gameState.players[2].hand.length} | Sets: {gameState.players[2].exposedSets.length}
                 </div>
               </div>
 
-              {/* Top Player (Bot 2) */}
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 w-full max-w-2xl px-4">
-                <div className="text-center mb-3">
-                  <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
-                    gameState.currentPlayer === 2 
-                      ? 'bg-amber-500 text-white shadow-lg' 
-                      : 'bg-white/20 text-white'
-                  }`}>
-                    <span className="mr-2">{gameState.players[2].name}</span>
-                    {gameState.currentPlayer === 2 && <span className="animate-pulse">●</span>}
-                  </div>
-                  <div className="text-xs text-emerald-200 mt-1">
-                    Hand: {gameState.players[2].hand.length} | Sets: {gameState.players[2].exposedSets.length}
+              {/* Exposed Sets */}
+              {gameState.players[2].exposedSets.length > 0 && (
+                <div className="mb-3 flex justify-center">
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {gameState.players[2].exposedSets.map((set, setIndex) => (
+                      <div key={setIndex} className="flex gap-1 bg-white/10 rounded-lg p-2">
+                        {set.map((tile, tileIndex) => (
+                          <TileComponent
+                            key={`${tile.id}-${tileIndex}`}
+                            tile={tile}
+                            height="compact"
+                            className="opacity-90"
+                          />
+                        ))}
+                      </div>
+                    ))}
                   </div>
                 </div>
+              )}
 
-                {/* Exposed Sets */}
-                {gameState.players[2].exposedSets.length > 0 && (
-                  <div className="mb-3 flex justify-center">
-                    <div className="flex flex-wrap gap-1 justify-center">
-                      {gameState.players[2].exposedSets.map((set, setIndex) => (
-                        <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
-                          {set.map((tile, tileIndex) => (
-                            <TileComponent
-                              key={`${tile.id}-${tileIndex}`}
-                              tile={tile}
-                              height="compact"
-                              className="opacity-90"
-                            />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Bot Hand (Hidden) */}
-                <div className="flex gap-1 justify-center">
-                  {Array.from({ length: gameState.players[2].hand.length }).map((_, index) => (
-                    <div
-                      key={index}
-                      className="w-8 h-12 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
-                    />
-                  ))}
-                </div>
+              {/* Bot Hand (Hidden) */}
+              <div className="flex gap-1 justify-center">
+                {Array.from({ length: gameState.players[2].hand.length }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
+                  />
+                ))}
               </div>
+            </div>
 
+            {/* Middle Row - Left and Right Players */}
+            <div className="grid grid-cols-3 gap-6 mb-6">
               {/* Left Player (Bot 3) */}
-              <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+              <div className="flex flex-col items-center">
                 <div className="text-center mb-3">
                   <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
                     gameState.currentPlayer === 3 
@@ -780,24 +616,136 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                   {Array.from({ length: gameState.players[3].hand.length }).map((_, index) => (
                     <div
                       key={index}
-                      className="w-8 h-12 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
+                      className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
                     />
                   ))}
                 </div>
               </div>
 
               {/* Center Area */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
-                <div className="bg-black/50 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+              <div className="flex items-center justify-center">
+                <div className="bg-black/50 backdrop-blur-sm rounded-xl p-6 border border-white/20 text-center">
                   <div className="text-white font-medium mb-2">Current Turn</div>
-                  <div className="text-amber-400 text-lg font-bold">{currentPlayer.name}</div>
+                  <div className="text-amber-400 text-xl font-bold">{currentPlayer.name}</div>
+                  <div className="text-emerald-200 text-sm mt-2">
+                    {gameState.currentPlayer === 0 ? 'Your turn - select and discard a tile' : 'Waiting...'}
+                  </div>
                 </div>
               </div>
+
+              {/* Right Player (Bot 1) */}
+              <div className="flex flex-col items-center">
+                <div className="text-center mb-3">
+                  <div className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
+                    gameState.currentPlayer === 1 
+                      ? 'bg-amber-500 text-white shadow-lg' 
+                      : 'bg-white/20 text-white'
+                  }`}>
+                    <span className="mr-2">{gameState.players[1].name}</span>
+                    {gameState.currentPlayer === 1 && <span className="animate-pulse">●</span>}
+                  </div>
+                  <div className="text-xs text-emerald-200 mt-1">
+                    Hand: {gameState.players[1].hand.length} | Sets: {gameState.players[1].exposedSets.length}
+                  </div>
+                </div>
+
+                {/* Exposed Sets */}
+                {gameState.players[1].exposedSets.length > 0 && (
+                  <div className="mb-3">
+                    <div className="flex flex-col gap-1">
+                      {gameState.players[1].exposedSets.map((set, setIndex) => (
+                        <div key={setIndex} className="flex gap-0.5 bg-white/10 rounded p-1">
+                          {set.map((tile, tileIndex) => (
+                            <TileComponent
+                              key={`${tile.id}-${tileIndex}`}
+                              tile={tile}
+                              height="compact"
+                              className="opacity-90"
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Bot Hand (Hidden) */}
+                <div className="flex flex-col gap-1">
+                  {Array.from({ length: gameState.players[1].hand.length }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="w-12 h-16 bg-gradient-to-b from-emerald-700 to-emerald-800 rounded border border-emerald-600 shadow-md"
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Player (Human) */}
+            <div>
+              <div className="text-center mb-3">
+                <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
+                  gameState.currentPlayer === 0 
+                    ? 'bg-amber-500 text-white shadow-lg' 
+                    : 'bg-white/20 text-white'
+                }`}>
+                  <span className="mr-2">{humanPlayer.name}</span>
+                  {gameState.currentPlayer === 0 && <span className="animate-pulse">●</span>}
+                </div>
+                <div className="text-xs text-emerald-200 mt-1">
+                  Hand: {humanPlayer.hand.length} | Sets: {humanPlayer.exposedSets.length}
+                </div>
+              </div>
+
+              {/* Exposed Sets */}
+              {humanPlayer.exposedSets.length > 0 && (
+                <div className="mb-4 flex justify-center">
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {humanPlayer.exposedSets.map((set, setIndex) => (
+                      <div key={setIndex} className="flex gap-1 bg-white/10 rounded-lg p-2">
+                        {set.map((tile, tileIndex) => (
+                          <TileComponent
+                            key={`${tile.id}-${tileIndex}`}
+                            tile={tile}
+                            height="compact"
+                            className="opacity-90"
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Human Player Hand */}
+              <div className="flex flex-wrap gap-2 justify-center mb-4">
+                {humanPlayer.hand.map((tile) => (
+                  <TileComponent
+                    key={tile.id}
+                    tile={tile}
+                    isSelected={selectedTile?.id === tile.id}
+                    onClick={() => handleTileSelect(tile)}
+                    className="hover:scale-105 transition-transform cursor-pointer"
+                  />
+                ))}
+              </div>
+
+              {/* Discard Button */}
+              {gameState.currentPlayer === 0 && selectedTile && (
+                <div className="text-center">
+                  <button
+                    onClick={() => handleDiscard(selectedTile)}
+                    className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium shadow-lg"
+                  >
+                    Discard Selected Tile
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Side Panel - Discard History */}
-          <div className="xl:col-span-1">
+          <div className="lg:col-span-1">
             <DiscardHistory 
               discardPile={gameState.discardPile} 
               players={gameState.players.map(p => ({ id: p.id, name: p.name }))}
