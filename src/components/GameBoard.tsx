@@ -573,7 +573,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               </div>
             </div>
 
-            {/* Middle Row - Left and Right Players */}
+            {/* Middle Row - Left Player, Center Discard Area, Right Player */}
             <div className="grid grid-cols-3 gap-6 mb-6">
               {/* Left Player (Bot 3) */}
               <div className="flex flex-col items-center">
@@ -622,14 +622,58 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 </div>
               </div>
 
-              {/* Center Area */}
-              <div className="flex items-center justify-center">
-                <div className="bg-black/50 backdrop-blur-sm rounded-xl p-6 border border-white/20 text-center">
-                  <div className="text-white font-medium mb-2">Current Turn</div>
-                  <div className="text-amber-400 text-xl font-bold">{currentPlayer.name}</div>
-                  <div className="text-emerald-200 text-sm mt-2">
-                    {gameState.currentPlayer === 0 ? 'Your turn - select and discard a tile' : 'Waiting...'}
+              {/* Center Area - Discard Pile */}
+              <div className="flex flex-col items-center justify-center">
+                <div className="bg-black/50 backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center min-h-[200px] w-full">
+                  <div className="text-white font-medium mb-3">Discard Pile</div>
+                  
+                  {/* Current Turn Info */}
+                  <div className="mb-4">
+                    <div className="text-amber-400 text-lg font-bold">{currentPlayer.name}</div>
+                    <div className="text-emerald-200 text-sm">
+                      {gameState.currentPlayer === 0 ? 'Your turn' : 'Waiting...'}
+                    </div>
                   </div>
+
+                  {/* Most Recent Discarded Tile */}
+                  {gameState.discardPile.length > 0 ? (
+                    <div className="mb-3">
+                      <div className="text-emerald-200 text-xs mb-2">Most Recent</div>
+                      <div className="flex justify-center">
+                        <TileComponent
+                          tile={gameState.discardPile[gameState.discardPile.length - 1].tile}
+                          className="shadow-xl border-2 border-amber-400"
+                        />
+                      </div>
+                      <div className="text-white text-xs mt-2">
+                        by {gameState.discardPile[gameState.discardPile.length - 1].playerName}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center text-emerald-200 py-4">
+                      <div className="w-16 h-20 border-2 border-dashed border-emerald-400 rounded-lg flex items-center justify-center mb-2">
+                        <span className="text-2xl">?</span>
+                      </div>
+                      <p className="text-sm">No discards yet</p>
+                    </div>
+                  )}
+
+                  {/* Recent Discards Preview */}
+                  {gameState.discardPile.length > 1 && (
+                    <div>
+                      <div className="text-emerald-200 text-xs mb-2">Recent</div>
+                      <div className="flex gap-1 justify-center flex-wrap">
+                        {gameState.discardPile.slice(-6, -1).map((discard, index) => (
+                          <TileComponent
+                            key={`${discard.tile.id}-${index}`}
+                            tile={discard.tile}
+                            height="compact"
+                            className="opacity-70"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
