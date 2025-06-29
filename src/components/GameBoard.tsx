@@ -413,6 +413,35 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   }, [gameState.currentPlayer, gameState.gamePhase, showClaimOptions, gameState.lastActionWasClaim, soundManager]);
 
+  // Organize discards by player position for authentic layout
+  const organizeDiscardsByPosition = () => {
+    const discardsByPosition = {
+      bottom: [] as DiscardedTile[],
+      right: [] as DiscardedTile[],
+      top: [] as DiscardedTile[],
+      left: [] as DiscardedTile[]
+    };
+
+    gameState.discardPile.forEach(discard => {
+      switch (discard.playerId) {
+        case 'player1':
+          discardsByPosition.bottom.push(discard);
+          break;
+        case 'bot1':
+          discardsByPosition.right.push(discard);
+          break;
+        case 'bot2':
+          discardsByPosition.top.push(discard);
+          break;
+        case 'bot3':
+          discardsByPosition.left.push(discard);
+          break;
+      }
+    });
+
+    return discardsByPosition;
+  };
+
   const currentPlayer = gameState.players[gameState.currentPlayer];
   const humanPlayer = gameState.players[0];
 
@@ -496,6 +525,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       </div>
     );
   }
+
+  const discardsByPosition = organizeDiscardsByPosition();
 
   return (
     <div className="min-h-screen p-4">
@@ -622,56 +653,66 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 </div>
               </div>
 
-              {/* Center Area - Discard Pile */}
+              {/* Center Area - Complete Discard History (Real Mahjong Style) */}
               <div className="flex flex-col items-center justify-center">
-                <div className="bg-black/50 backdrop-blur-sm rounded-xl p-4 border border-white/20 text-center min-h-[200px] w-full">
-                  <div className="text-white font-medium mb-3">Discard Pile</div>
+                <div className="bg-emerald-900/40 backdrop-blur-sm rounded-xl p-4 border border-emerald-600/30 w-full min-h-[300px] relative">
+                  <div className="text-white font-medium mb-3 text-center text-sm">Discard Pool</div>
                   
-                  {/* Current Turn Info */}
-                  <div className="mb-4">
-                    <div className="text-amber-400 text-lg font-bold">{currentPlayer.name}</div>
-                    <div className="text-emerald-200 text-sm">
-                      {gameState.currentPlayer === 0 ? 'Your turn' : 'Waiting...'}
-                    </div>
-                  </div>
-
-                  {/* Most Recent Discarded Tile */}
-                  {gameState.discardPile.length > 0 ? (
-                    <div className="mb-3">
-                      <div className="text-emerald-200 text-xs mb-2">Most Recent</div>
-                      <div className="flex justify-center">
-                        <TileComponent
-                          tile={gameState.discardPile[gameState.discardPile.length - 1].tile}
-                          className="shadow-xl border-2 border-amber-400"
-                        />
-                      </div>
-                      <div className="text-white text-xs mt-2">
-                        by {gameState.discardPile[gameState.discardPile.length - 1].playerName}
+                  {gameState.discardPile.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-emerald-200">
+                      <div className="text-center">
+                        <div className="text-4xl mb-2">🀄</div>
+                        <p className="text-sm">No discards yet</p>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center text-emerald-200 py-4">
-                      <div className="w-16 h-20 border-2 border-dashed border-emerald-400 rounded-lg flex items-center justify-center mb-2">
-                        <span className="text-2xl">?</span>
+                    <div className="relative h-full">
+                      {/* Authentic Mahjong Discard Layout */}
+                      <div className="grid grid-cols-6 gap-1 justify-center items-center h-full p-2">
+                        {gameState.discardPile.map((discard, index) => {
+                          // Determine position based on player and order
+                          const isRecent = index >= gameState.discardPile.length - 6;
+                          const playerColors = {
+                            'player1': 'border-blue-400/50',
+                            'bot1': 'border-green-400/50', 
+                            'bot2': 'border-red-400/50',
+                            'bot3': 'border-purple-400/50'
+                          };
+                          
+                          return (
+                            <div 
+                              key={`${discard.tile.id}-${index}`}
+                              className={`relative ${isRecent ? 'animate-pulse' : ''}`}
+                            >
+                              <TileComponent
+                                tile={discard.tile}
+                                height="compact"
+                                className={`
+                                  ${isRecent ? 'shadow-lg scale-105' : 'opacity-80 scale-95'}
+                                  ${playerColors[discard.playerId as keyof typeof playerColors] || 'border-gray-400/50'}
+                                  border-2 transition-all duration-300 hover:scale-110 hover:opacity-100
+                                `}
+                              />
+                              {/* Turn number indicator */}
+                              <div className="absolute -top-1 -right-1 bg-black/70 text-white text-[8px] rounded-full w-3 h-3 flex items-center justify-center font-bold">
+                                {discard.turnNumber}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <p className="text-sm">No discards yet</p>
-                    </div>
-                  )}
-
-                  {/* Recent Discards Preview */}
-                  {gameState.discardPile.length > 1 && (
-                    <div>
-                      <div className="text-emerald-200 text-xs mb-2">Recent</div>
-                      <div className="flex gap-1 justify-center flex-wrap">
-                        {gameState.discardPile.slice(-6, -1).map((discard, index) => (
-                          <TileComponent
-                            key={`${discard.tile.id}-${index}`}
-                            tile={discard.tile}
-                            height="compact"
-                            className="opacity-70"
-                          />
-                        ))}
-                      </div>
+                      
+                      {/* Most recent discard highlight */}
+                      {gameState.discardPile.length > 0 && (
+                        <div className="absolute bottom-2 left-2 right-2 bg-black/50 rounded-lg p-2 text-center">
+                          <div className="text-amber-400 text-xs font-medium">
+                            Last: {gameState.discardPile[gameState.discardPile.length - 1].playerName}
+                          </div>
+                          <div className="text-emerald-200 text-[10px]">
+                            Turn {gameState.discardPile[gameState.discardPile.length - 1].turnNumber}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -788,7 +829,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
             </div>
           </div>
 
-          {/* Side Panel - Discard History */}
+          {/* Side Panel - Discard History (Detailed View) */}
           <div className="lg:col-span-1">
             <DiscardHistory 
               discardPile={gameState.discardPile} 
