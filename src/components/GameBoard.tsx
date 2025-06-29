@@ -76,17 +76,21 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       { id: 'bot3', name: 'West Bot', hand: [], exposedSets: [], score: 0, isDealer: false, isBot: true }
     ];
 
-    // Deal tiles - 13 to each player, 14 to dealer
+    // Deal tiles - 13 to each player first
     let tileIndex = 0;
-    players.forEach((player, playerIndex) => {
-      const tilesCount = player.isDealer ? 14 : 13;
-      player.hand = sortTiles(tiles.slice(tileIndex, tileIndex + tilesCount));
-      tileIndex += tilesCount;
+    players.forEach((player) => {
+      player.hand = sortTiles(tiles.slice(tileIndex, tileIndex + 13));
+      tileIndex += 13;
     });
+
+    // Give the dealer (player) the 14th tile
+    const dealerIndex = players.findIndex(p => p.isDealer);
+    players[dealerIndex].hand = sortTiles([...players[dealerIndex].hand, tiles[tileIndex]]);
+    tileIndex += 1;
 
     const newGameState: GameState = {
       players,
-      currentPlayer: 0, // Dealer starts
+      currentPlayer: dealerIndex, // Dealer starts
       wall: tiles.slice(tileIndex),
       discardPile: [],
       round: 1,
@@ -110,7 +114,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     initializeGame();
   }, [initializeGame]);
 
-  // FIXED: Bot AI with proper player tracking
+  // FIXED: Bot AI with proper turn flow
   const executeBotTurn = useCallback((state: GameState) => {
     const currentPlayer = state.players[state.currentPlayer];
     if (!currentPlayer.isBot) return;
@@ -124,13 +128,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         
         if (!player.isBot) return prevState;
 
-        // FIXED: Ensure we're working with the correct bot player
         const botPlayer = { ...player };
         const botPlayerIndex = newState.currentPlayer;
 
-        // Check if bot can win with current hand
+        // Check if bot can win with current hand (before drawing)
         if (isWinningHand(botPlayer.hand, botPlayer.exposedSets)) {
-          // Bot wins by self-draw
           const analysis = analyzeWinningHand(botPlayer.hand, botPlayer.exposedSets);
           const score = calculateWinScore(botPlayer.hand, botPlayer.exposedSets, 'self-drawn', botPlayer.isDealer);
           
@@ -163,8 +165,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           return newState;
         }
 
-        // If bot just claimed, don't draw a tile
-        if (!newState.lastActionWasClaim && newState.wall.length > 0) {
+        // FIXED: Only draw if not from a claim and hand has 13 tiles
+        if (!newState.lastActionWasClaim && botPlayer.hand.length === 13 && newState.wall.length > 0) {
           // Draw a tile
           const drawnTile = newState.wall[0];
           botPlayer.hand = sortTiles([...botPlayer.hand, drawnTile]);
@@ -210,6 +212,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         // Reset the claim flag
         newState.lastActionWasClaim = false;
 
+        // FIXED: Bot must have 14 tiles to discard
+        if (botPlayer.hand.length !== 14) {
+          console.error('Bot hand size error:', botPlayer.hand.length);
+          return prevState;
+        }
+
         // Bot decision making for discarding
         const winningTiles = isOneAwayFromWin(botPlayer.hand, botPlayer.exposedSets);
         let tileToDiscard: Tile;
@@ -236,13 +244,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
         // Add to discard pile
         const discardedTile: DiscardedTile = {
           tile: tileToDiscard,
-          playerId: botPlayer.id, // FIXED: Use correct bot player ID
-          playerName: botPlayer.name, // FIXED: Use correct bot player name
+          playerId: botPlayer.id,
+          playerName: botPlayer.name,
           turnNumber: newState.turnNumber
         };
         
         newState.discardPile.push(discardedTile);
-        newState.players[botPlayerIndex] = botPlayer; // FIXED: Update correct player index
+        newState.players[botPlayerIndex] = botPlayer;
         
         soundManager.playTileSound('discard', getPlayerPosition(botPlayer.id));
 
@@ -302,7 +310,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }, 1000);
   }, []);
 
-  // FIXED: Handle bot claims with proper player tracking
+  // Handle bot claims with proper player tracking
   const handleBotClaim = (state: GameState, claim: any, discardedTile: DiscardedTile) => {
     const claimingPlayerIndex = state.players.findIndex(p => p.id === claim.playerId);
     if (claimingPlayerIndex === -1) return;
@@ -343,13 +351,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     
     // Update state
     state.players[claimingPlayerIndex] = claimingPlayer;
-    state.currentPlayer = claimingPlayerIndex; // FIXED: Set current player to the claiming player
-    state.lastActionWasClaim = true; // FIXED: Set claim flag
+    state.currentPlayer = claimingPlayerIndex;
+    state.lastActionWasClaim = true;
     
     // Show bot action
     setBotAction({
       type: claim.type,
-      playerName: claimingPlayer.name, // FIXED: Use claiming player's name
+      playerName: claimingPlayer.name,
       tiles: claimedSet
     });
 
@@ -471,12 +479,18 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   };
 
-  // Handle player discard
+  // FIXED: Handle player discard with proper hand size check
   const handleDiscard = () => {
     if (!gameState || !selectedTile || gameState.gamePhase !== 'playing') return;
     
     const currentPlayer = gameState.players[gameState.currentPlayer];
     if (currentPlayer.isBot) return;
+
+    // FIXED: Player must have 14 tiles to discard
+    if (currentPlayer.hand.length !== 14) {
+      console.error('Player hand size error:', currentPlayer.hand.length);
+      return;
+    }
 
     setGameState(prevState => {
       if (!prevState) return prevState;
@@ -561,15 +575,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     });
   };
 
-  // Handle player draw
+  // FIXED: Handle player draw with proper hand size check
   const handleDraw = () => {
     if (!gameState || gameState.gamePhase !== 'playing') return;
     
     const currentPlayer = gameState.players[gameState.currentPlayer];
     if (currentPlayer.isBot || gameState.wall.length === 0) return;
 
-    // Don't draw if last action was a claim
-    if (gameState.lastActionWasClaim) return;
+    // FIXED: Only draw if player has 13 tiles and it's not after a claim
+    if (currentPlayer.hand.length !== 13 || gameState.lastActionWasClaim) return;
 
     setGameState(prevState => {
       if (!prevState) return prevState;
@@ -622,8 +636,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
   const currentPlayer = gameState.players[gameState.currentPlayer];
   const humanPlayer = gameState.players[0];
   const isPlayerTurn = gameState.currentPlayer === 0 && !currentPlayer.isBot;
-  const canDraw = isPlayerTurn && gameState.wall.length > 0 && !gameState.lastActionWasClaim;
-  const canDiscard = isPlayerTurn && selectedTile !== null;
+  
+  // FIXED: Proper draw/discard conditions
+  const canDraw = isPlayerTurn && gameState.wall.length > 0 && !gameState.lastActionWasClaim && humanPlayer.hand.length === 13;
+  const canDiscard = isPlayerTurn && selectedTile !== null && humanPlayer.hand.length === 14;
 
   return (
     <div className="min-h-screen p-4 relative">
