@@ -34,7 +34,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       });
     }
 
-    // Give dealer (player1) one extra tile to start
+    // Give dealer (player1) one extra tile
     if (tileIndex < tiles.length) {
       players[0].hand.push(tiles[tileIndex++]);
     }
@@ -46,7 +46,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
 
     return {
       players,
-      currentPlayer: 0, // Dealer starts with 14 tiles
+      currentPlayer: 0, // Dealer starts
       wall: tiles.slice(tileIndex),
       discardPile: [],
       round: 1,
@@ -79,7 +79,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setSelectedTile(selectedTile?.id === tile.id ? null : tile);
   };
 
-  // Handle tile discard - FIXED: Proper turn transition
+  // Handle tile discard
   const handleDiscard = (tile: Tile) => {
     if (gameState.currentPlayer !== 0 || gameState.gamePhase !== 'playing') return;
     
@@ -117,7 +117,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       setShowClaimOptions(true);
       setGameState(newState);
     } else {
-      // FIXED: Move to next player and increment turn
+      // Move to next player
       newState.currentPlayer = (gameState.currentPlayer + 1) % 4;
       newState.turnNumber += 1;
       newState.lastActionWasClaim = false;
@@ -128,7 +128,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     soundManager.playTileSound('discard', 'bottom');
   };
 
-  // Check claim options for human player only
+  // Check claim options for human player only (to prevent auto-claiming)
   const checkClaimOptions = (state: GameState, discardedTile: Tile, discardingPlayer: number) => {
     let canClaim = false;
     let chow: Tile[][] = [];
@@ -167,7 +167,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     return { canClaim, chow, pung, kong };
   };
 
-  // Handle claim action - FIXED: Proper tile management
+  // Handle claim action
   const handleClaim = (action: 'chow' | 'pung' | 'kong', tiles?: Tile[]) => {
     if (!claimOptions.discardedTile) return;
 
@@ -223,7 +223,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     // Remove the discarded tile from discard pile (it's been claimed)
     newState.discardPile = newState.discardPile.slice(0, -1);
     
-    // FIXED: Set current player to the claiming player (they must discard)
+    // Set current player to the claiming player
     newState.currentPlayer = claimingPlayer;
     newState.lastActionWasClaim = true;
     
@@ -237,11 +237,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     soundManager.playTileSound('claim', 'center');
   };
 
-  // Skip claim - FIXED: Proper turn progression
+  // Skip claim
   const handleSkipClaim = () => {
     const newState = { ...gameState };
-    // Move to next player after the discarding player
-    newState.currentPlayer = (claimOptions.discardingPlayer + 1) % 4;
+    newState.currentPlayer = (gameState.currentPlayer + 1) % 4;
     newState.turnNumber += 1;
     newState.lastActionWasClaim = false;
     setGameState(newState);
@@ -249,22 +248,34 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     setClaimOptions({ chow: [], pung: null, kong: null, discardedTile: null, discardingPlayer: -1 });
   };
 
-  // FIXED: Proper bot turn execution following Mahjong rules
+  // Draw tile for current player
+  const drawTile = (state: GameState): GameState => {
+    if (state.wall.length === 0) return state;
+    
+    const newState = { ...state };
+    newState.players = state.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets] }));
+    newState.wall = [...state.wall];
+    
+    const drawnTile = newState.wall.pop()!;
+    newState.players[state.currentPlayer].hand.push(drawnTile);
+    newState.players[state.currentPlayer].hand = sortTiles(newState.players[state.currentPlayer].hand);
+    
+    return newState;
+  };
+
+  // Execute bot turn with FIXED turn mechanics
   const executeBotTurn = useCallback((state: GameState): GameState => {
     const currentPlayer = state.players[state.currentPlayer];
     let newState = { ...state };
-    newState.players = state.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets] }));
+    
+    // Draw tile if not after a claim and player has 13 tiles
+    if (!state.lastActionWasClaim && currentPlayer.hand.length === 13 && state.wall.length > 0) {
+      newState = drawTile(newState);
+    }
     
     const player = newState.players[newState.currentPlayer];
     
-    // STEP 1: Draw a tile if this is a new turn (not after a claim)
-    if (!state.lastActionWasClaim && state.wall.length > 0) {
-      const drawnTile = newState.wall.pop()!;
-      player.hand.push(drawnTile);
-      player.hand = sortTiles(player.hand);
-    }
-    
-    // STEP 2: Check for winning hand
+    // Check for winning hand
     if (isWinningHand(player.hand, player.exposedSets)) {
       setBotAction({
         action: 'win',
@@ -285,14 +296,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       return newState;
     }
     
-    // STEP 3: Discard a tile (bot should now have 14 tiles, discard to get 13)
+    // Discard a tile (bot should have 14 tiles, discard to get 13)
     if (player.hand.length > 0) {
-      // Simple AI: discard a random tile
       const randomIndex = Math.floor(Math.random() * player.hand.length);
       const tileToDiscard = player.hand[randomIndex];
       
       // Remove tile from hand
-      player.hand.splice(randomIndex, 1);
+      newState.players = newState.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets] }));
+      newState.players[newState.currentPlayer].hand.splice(randomIndex, 1);
       
       // Add to discard pile
       const discardedTile: DiscardedTile = {
@@ -315,9 +326,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
           discardingPlayer: newState.currentPlayer
         });
         setShowClaimOptions(true);
-        // Don't advance turn yet - wait for claim decision
       } else {
-        // STEP 4: Move to next player
+        // Move to next player
         newState.currentPlayer = (newState.currentPlayer + 1) % 4;
         newState.turnNumber += 1;
       }
@@ -326,7 +336,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
       
       // Play sound based on bot position
       const positions = ['bottom', 'right', 'top', 'left'];
-      soundManager.playTileSound('discard', positions[state.currentPlayer] as any);
+      soundManager.playTileSound('discard', positions[newState.currentPlayer] as any);
     }
     
     return newState;
@@ -366,24 +376,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
     }
   }, [gameState.wall.length, gameState.turnNumber, gameState.gamePhase, soundManager]);
 
-  // FIXED: Handle human player's turn - draw tile when it's their turn
+  // Handle human player's turn (draw tile if needed) - FIXED
   useEffect(() => {
     if (gameState.gamePhase !== 'playing') return;
     if (gameState.currentPlayer === 0 && !gameState.players[0].isBot && !showClaimOptions) {
       const player = gameState.players[0];
       
-      // Draw tile if this is a new turn (not after a claim) and player has 13 tiles
+      // Draw tile if this is a new turn and player has 13 tiles
       if (!gameState.lastActionWasClaim && player.hand.length === 13 && gameState.wall.length > 0) {
-        setGameState(prevState => {
-          const newState = { ...prevState };
-          newState.players = prevState.players.map(p => ({ ...p, hand: [...p.hand], exposedSets: [...p.exposedSets] }));
-          
-          const drawnTile = newState.wall.pop()!;
-          newState.players[0].hand.push(drawnTile);
-          newState.players[0].hand = sortTiles(newState.players[0].hand);
-          
-          return newState;
-        });
+        setGameState(prevState => drawTile(prevState));
         soundManager.playTileSound('draw', 'bottom');
       }
     }
@@ -742,7 +743,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
               </div>
             </div>
 
-            {/* Bottom Player (Human) - RESTORED SECTION */}
+            {/* Bottom Player (Human) */}
             <div>
               <div className="text-center mb-3">
                 <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
@@ -778,7 +779,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 </div>
               )}
 
-              {/* Human Player Hand - RESTORED */}
+              {/* Human Player Hand */}
               <div className="flex flex-wrap gap-2 justify-center mb-4">
                 {humanPlayer.hand.map((tile) => (
                   <TileComponent
@@ -791,7 +792,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameMode }) => {
                 ))}
               </div>
 
-              {/* Discard Button - RESTORED */}
+              {/* Discard Button */}
               {gameState.currentPlayer === 0 && selectedTile && (
                 <div className="text-center">
                   <button
