@@ -34,9 +34,9 @@ const RulesPage: React.FC = () => {
       content: [
         'Click tiles in your hand to select them, then click "Discard Selected Tile"',
         'When opponents discard tiles, you can claim them to complete sets',
-        'Chow: Sequence of 3 consecutive tiles (only from the previous player)',
-        'Pung: 3 identical tiles (can claim from any player)',
-        'Kong: 4 identical tiles (can claim from any player + draws replacement tile)',
+        'Chow: Sequence of 3 consecutive tiles',
+        'Pung: 3 identical tiles',
+        'Kong: 4 identical tiles (draws replacement tile)',
         'Priority: Win > Kong > Pung > Chow (higher priority claims override lower ones)'
       ]
     },
@@ -60,8 +60,8 @@ const RulesPage: React.FC = () => {
         'Win claims have highest priority - you can win by claiming any tile that completes your hand',
         'Kong automatically draws a replacement tile from the wall',
         'Bot actions are displayed with animated indicators showing what they claimed',
-        'You can only form Chow (sequences) from the player immediately before you',
-        'All other claims (Pung, Kong, Win) can be made from any player\'s discard'
+        'The game automatically handles claim priority and turn order',
+        'Simply choose from the available options when the claim popup appears'
       ]
     },
     {
