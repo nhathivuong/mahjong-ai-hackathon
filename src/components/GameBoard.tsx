@@ -903,25 +903,17 @@ export default function GameBoard({ gameMode }: GameBoardProps) {
             ))}
           </div>
 
-          {/* Action Buttons */}
-          <div className="text-center space-x-4">
-            {gameState.currentPlayer === 0 && selectedTile && (
+          {/* Discard Button - Only show when tile is selected */}
+          {gameState.currentPlayer === 0 && selectedTile && (
+            <div className="text-center">
               <button
                 onClick={() => handleDiscard(selectedTile)}
                 className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium shadow-lg"
               >
-                Discard
+                Discard Selected Tile
               </button>
-            )}
-            {gameState.currentPlayer === 0 && !selectedTile && gameState.wall.length > 0 && (
-              <button
-                onClick={() => setGameState(prevState => drawTile(prevState))}
-                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium shadow-lg"
-              >
-                Draw Tile
-              </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Claim Options Modal */}
